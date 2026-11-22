@@ -1,0 +1,91 @@
+# Repository Guidelines
+
+Rules for changing this repository. `CLAUDE.md` is a symlink to this file.
+[README.md](README.md) describes what the app does; all of its code is in
+`Sources/FreeDisplay/`.
+
+## Subagents
+- Run subagents, workflow agents and delegated sessions on a cheap, practical
+  model (Claude Opus 5.5 rather than Claude Fable 5.2, for example) unless the
+  user asks for another.
+- Name the model when spawning; left unset, an agent inherits the session's.
+
+## Architecture
+- One Swift package with one executable target. The same binary is the
+  menu-bar app and the CLI: `main.swift` runs `CLIRunner` and exits whenever a
+  command is given, before `NSApplication` starts, so a CLI command never
+  creates UI.
+- `SkyLightEngine.swift` is the only place that calls SkyLight. It loads the
+  framework with `dlopen`/`dlsym` at run time and every symbol is optional: a
+  missing one becomes an empty mode list or a failed switch, never a crash.
+  Do not link the private framework or add a bridging header for it.
+- A mode record is read from the 0xD4-byte buffer that
+  `CGSGetDisplayModeDescriptionOfLength` fills. Its offsets are an observed
+  layout, not a documented one; change them only with a dump from a real
+  display, and say which macOS version it came from.
+- `DisplayViewModel` (`@MainActor`) owns the app state. `MenuBarPopoverView`
+  is shown both in the menu-bar popover and in the standalone window; it is
+  one view, so change it once.
+- `BrightnessController` owns DDC/CI (`IOAVService`, VCP 0x10, loaded with
+  `dlsym`) and the gamma table.
+
+## Behavior invariants
+- Offer only modes macOS reports and marks safe (`DisplayModeItem.isSafe`).
+  Never synthesize modes, write display overrides (EDID, files under
+  `/Library/Displays`) or create virtual displays.
+- Presets derive from the panel's native size: native/1.25, native/(4/3) and
+  native/1.6, each within 80 px and at the native aspect ratio (±0.04), plus
+  native 1×. Never hard-code a resolution.
+- A rate chosen from the refresh-rate menu goes through
+  `selectMode(_:requireConfirmIfHzChanges: true)`: it applies `.forSession`
+  and reverts after 10 seconds unless the user confirms it. Presets, the
+  slider, the HiDPI switch and the mode list keep the current refresh rate
+  when the target mode offers it and apply `.permanently`. A new control
+  whose main job is changing the refresh rate uses the confirmed path.
+- Brightness stays within 20–100 and warmth within 0–50. DDC/CI is used only
+  while warmth is off, the gamma table otherwise, and `reset` restores the
+  ColorSync settings.
+- The bundle identifier `local.opensource.FreeDisplay`, the distributed
+  notification `local.opensource.FreeDisplay.showPopover` and the UserDefaults
+  keys `FreeDisplay.softwareBrightness` and `FreeDisplay.softwareWarmth` are
+  installed state: renaming one breaks existing installs (the second-launch
+  handoff, saved values, the login item).
+- The app is `LSUIElement` with the `.accessory` activation policy, so it has
+  no Dock icon; closing the window leaves it running in the menu bar.
+
+## Language
+- Every user-facing string, in the UI and in CLI output, goes through
+  `L10n.tr(zh:en:)` with both languages. `--lang zh|en` overrides the system
+  language; check both.
+- `README.md` and `README.zh-CN.md` change together. A new CLI command or flag
+  updates the help text in both languages and both READMEs.
+
+## Swift
+- Swift tools 5.9 and macOS 13: `Package.swift` and `LSMinimumSystemVersion`
+  in `Info.plist` change together.
+- No third-party dependencies; system frameworks only (AppKit, SwiftUI,
+  CoreGraphics, IOKit, ServiceManagement).
+- The release build has no warnings; keep it that way.
+
+## Verification
+There is no test target and no CI. Run what your change touches and say what
+you could not run.
+- Build: `swift build -c release`.
+- CLI: `.build/release/FreeDisplay status`, `list --hidpi`, and `help` with
+  `--lang en` and with `--lang zh`.
+- Mode switching needs a real external display. Note the starting mode with
+  `status`, apply the change (for example `preset 125`), switch back with
+  `set`, and check `status` after each step. Leave the display in the mode it
+  started in.
+- UI: `./build.sh` replaces `/Applications/FreeDisplay.app` and starts it;
+  run it only when installing is what the user wants, then check the popover
+  in both languages.
+
+## Commits, PRs and releases
+- Commits: short and imperative. PRs: summary, rationale, and how it was
+  verified (which display, which macOS version).
+- A release bumps `CFBundleShortVersionString` and `CFBundleVersion` in
+  `Info.plist`; the build number only rises.
+- `docs/assets/` holds the README images. The English and Chinese demo GIFs
+  change together, as whole files, each under 3 MB.
+- Never commit build output (`.build/`, `dist/`), recordings or secrets.
