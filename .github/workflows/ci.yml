@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, smoke-test and package
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Build release binary (warnings are errors)
+        run: swift build -c release -Xswiftc -warnings-as-errors
+
+      - name: CLI smoke test
+        run: |
+          set -euo pipefail
+          bin=.build/release/FreeDisplay
+          "$bin" --lang en help | grep -q "freedisplay preset <125|133|160|100>"
+          "$bin" --lang zh help | grep -q "一键切换黄金预设档位"
+          if "$bin" --lang en no-such-command > /dev/null 2>&1; then
+            echo "::error::an unknown command must exit nonzero"
+            exit 1
+          fi
+          # Runners have a virtual display at most; print what macOS reports, don't gate on it.
+          "$bin" --lang en status || true
+
+      - name: Package the universal app (ad hoc signed)
+        run: ./build.sh --universal --no-install
+
+      - name: Check the app bundle
+        run: |
+          set -euo pipefail
+          app=dist/FreeDisplay.app
+          exe="$app/Contents/MacOS/FreeDisplay"
+          test "$(lipo -archs "$exe" | tr ' ' '\n' | sort | xargs)" = "arm64 x86_64"
+          minimum="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist")"
+          for arch in arm64 x86_64; do
+            otool -arch "$arch" -l "$exe" | grep -A4 LC_BUILD_VERSION | grep -q "minos ${minimum}"
+          done
+          plutil -lint "$app/Contents/Info.plist"
+          test -s "$app/Contents/Resources/AppIcon.icns"
+          codesign --verify --strict "$app"
+          du -sh "$app"
+
+      - name: Check release tooling
+        run: python3 -m py_compile scripts/release/macos_package.py

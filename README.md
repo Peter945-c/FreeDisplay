@@ -11,6 +11,8 @@
   <a href="https://www.apple.com/macos/"><img alt="macOS 13+" src="https://img.shields.io/badge/macOS-13%2B-000000?logo=apple&logoColor=white"></a>
   <a href="https://developer.apple.com/xcode/swiftui/"><img alt="SwiftUI" src="https://img.shields.io/badge/UI-SwiftUI-0D96F6?logo=swift&logoColor=white"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
+  <a href="https://github.com/acking-you/FreeDisplay/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/acking-you/FreeDisplay?logo=github&color=success"></a>
+  <a href="https://github.com/acking-you/FreeDisplay/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/acking-you/FreeDisplay/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/acking-you/FreeDisplay/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/acking-you/FreeDisplay?style=social"></a>
 </p>
 
@@ -103,8 +105,18 @@ Worth knowing:
 
 ## Get started
 
-You need macOS 13 or later and Swift 5.9 or later (Xcode 15, or the Command
-Line Tools).
+**Download** `FreeDisplay-<version>.dmg` from
+[Releases](https://github.com/acking-you/FreeDisplay/releases/latest), open it
+and drag FreeDisplay to Applications. It is one app for Apple silicon and Intel
+Macs with macOS 13 or later, signed with a Developer ID and notarized by Apple.
+Start it, click the display icon in the menu bar, then a preset. For the
+command line, link the app's binary onto your `PATH`:
+
+```bash
+ln -sf /Applications/FreeDisplay.app/Contents/MacOS/FreeDisplay /opt/homebrew/bin/freedisplay
+```
+
+**Or build it** with Swift 5.9 or later (Xcode 15, or the Command Line Tools):
 
 ```bash
 git clone https://github.com/acking-you/FreeDisplay.git
@@ -116,7 +128,8 @@ cd FreeDisplay
 generated icon, signs it ad hoc for this Mac, replaces
 `/Applications/FreeDisplay.app` (quitting a running copy first), links the CLI
 to `/opt/homebrew/bin/freedisplay` when that directory exists, and starts the
-app. Click the display icon in the menu bar, then a preset.
+app. `./build.sh --universal --no-install` only packages a universal
+`dist/FreeDisplay.app`.
 
 From the terminal:
 
@@ -140,8 +153,10 @@ holds the app state and the refresh-rate safety net, `MenuBarPopoverView.swift`
 is the SwiftUI panel shared by the popover and the window,
 `BrightnessController.swift` handles DDC/CI and the gamma table, and
 `CLI.swift`, `Localization.swift` and `main.swift` cover the command line, the
-two languages and startup. `build.sh` packages and installs the app. The rules
-a change must keep are in [AGENTS.md](AGENTS.md).
+two languages and startup. `build.sh` packages and installs the app. CI builds
+every push and pull request, and a `vX.Y.Z` tag publishes a signed, notarized
+DMG through `scripts/release/macos_package.py` ([changelog](CHANGELOG.md)). The
+rules a change must keep are in [AGENTS.md](AGENTS.md).
 
 ```bash
 swift build -c release

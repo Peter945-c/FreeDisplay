@@ -1,0 +1,149 @@
+name: Release
+
+# A vX.Y.Z tag builds, signs, notarizes and publishes FreeDisplay-X.Y.Z.dmg.
+# Run it by hand to rehearse everything except publishing.
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    name: Sign, notarize and publish
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the version
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist)"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match CFBundleShortVersionString ${version} in Info.plist"
+            exit 1
+          fi
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && ! grep -q "^## \[${version}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section for ${version}"
+            exit 1
+          fi
+
+      - name: Check signing configuration
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_NOTARY_PRIVATE_KEY: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY }}
+          MACOS_SIGNING_IDENTITY: ${{ vars.MACOS_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          APPLE_NOTARY_KEY_ID: ${{ vars.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ vars.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          python3 - <<'PY'
+          import os
+          required = ('MACOS_CERTIFICATE_P12_BASE64', 'MACOS_CERTIFICATE_PASSWORD',
+                      'APPLE_NOTARY_PRIVATE_KEY', 'MACOS_SIGNING_IDENTITY', 'APPLE_TEAM_ID',
+                      'APPLE_NOTARY_KEY_ID', 'APPLE_NOTARY_ISSUER_ID')
+          missing = [key for key in required if not os.environ.get(key)]
+          if missing:
+              raise SystemExit('Missing signing configuration: ' + ', '.join(missing))
+          PY
+
+      - name: Build the universal app
+        run: ./build.sh --universal --no-install
+
+      - name: Sign, notarize and verify
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_NOTARY_PRIVATE_KEY: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY }}
+          MACOS_SIGNING_IDENTITY: ${{ vars.MACOS_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          APPLE_NOTARY_KEY_ID: ${{ vars.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ vars.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          python3 scripts/release/macos_package.py \
+            --app dist/FreeDisplay.app \
+            --output "dist/release/FreeDisplay-${{ steps.version.outputs.version }}.dmg"
+
+      - name: Clean up temporary signing credentials
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, shutil, subprocess
+          for directory in pathlib.Path(os.environ['RUNNER_TEMP']).glob('freedisplay-signing-*'):
+              keychain = directory / 'signing.keychain-db'
+              if keychain.exists():
+                  subprocess.run(['security', 'delete-keychain', str(keychain)], check=True)
+              shutil.rmtree(directory)
+          PY
+
+      - name: Write checksum and release notes
+        run: |
+          set -euo pipefail
+          version='${{ steps.version.outputs.version }}'
+          dmg="FreeDisplay-${version}.dmg"
+          (cd dist/release && shasum -a 256 "${dmg}" > "${dmg}.sha256")
+          sha="$(cut -d ' ' -f 1 "dist/release/${dmg}.sha256")"
+          awk -v ver="${version}" '
+            index($0, "## [" ver "]") == 1 { capture = 1; next }
+            capture && /^## \[/ { exit }
+            capture { print }
+          ' CHANGELOG.md > changelog_section.md
+          {
+            if [ -s changelog_section.md ]; then
+              cat changelog_section.md
+            else
+              echo "_No changelog section for ${version}._"
+            fi
+            cat <<EOF
+
+          ## Download
+
+          **${dmg}** runs on Apple silicon and Intel Macs with macOS 13 or later. It is signed with a Developer ID and notarized by Apple.
+
+          1. Open the DMG and drag **FreeDisplay** to **Applications**.
+          2. Start FreeDisplay; its display icon appears in the menu bar.
+          3. Optional command line: \`ln -sf /Applications/FreeDisplay.app/Contents/MacOS/FreeDisplay /opt/homebrew/bin/freedisplay\` (or into \`/usr/local/bin\`).
+
+          SHA-256: \`${sha}\`
+          EOF
+          } > release_notes.md
+          cat release_notes.md
+
+      - name: Upload verification logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-verification
+          path: dist/release/*-verification/
+          if-no-files-found: ignore
+
+      - name: Upload the verified DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: FreeDisplay-${{ steps.version.outputs.version }}
+          path: |
+            dist/release/FreeDisplay-*.dmg
+            dist/release/FreeDisplay-*.dmg.sha256
+            release_notes.md
+          if-no-files-found: error
+
+      - name: Publish the GitHub release
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: FreeDisplay ${{ github.ref_name }}
+          body_path: release_notes.md
+          files: |
+            dist/release/FreeDisplay-${{ steps.version.outputs.version }}.dmg
+            dist/release/FreeDisplay-${{ steps.version.outputs.version }}.dmg.sha256

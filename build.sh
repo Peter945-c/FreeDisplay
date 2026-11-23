@@ -3,19 +3,44 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+usage() {
+    cat <<'USAGE'
+用法 / Usage: ./build.sh [--universal] [--no-install]
+  --universal   同时编译 arm64 与 x86_64 / build one binary for Apple silicon and Intel
+  --no-install  只生成 dist/FreeDisplay.app，不安装、不启动 / only package dist/FreeDisplay.app
+USAGE
+}
+
+UNIVERSAL=0
+INSTALL=1
+for arg in "$@"; do
+    case "$arg" in
+        --universal) UNIVERSAL=1 ;;
+        --no-install) INSTALL=0 ;;
+        -h|--help) usage; exit 0 ;;
+        *) usage >&2; exit 2 ;;
+    esac
+done
+
 APP_NAME="FreeDisplay"
 DIST_APP="dist/${APP_NAME}.app"
 INSTALL_APP="/Applications/${APP_NAME}.app"
 CLI_LINK="/opt/homebrew/bin/freedisplay"
 
+BUILD_ARGS=(-c release)
+if (( UNIVERSAL )); then
+    BUILD_ARGS+=(--arch arm64 --arch x86_64)
+fi
+
 echo "==> [1/4] 编译 Release 原生二进制..."
-swift build -c release
+swift build "${BUILD_ARGS[@]}"
+BIN_DIR="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)"
 
 echo "==> [2/4] 生成高清应用图标与 .app 包..."
 rm -rf "$DIST_APP"
 mkdir -p "$DIST_APP/Contents/MacOS" "$DIST_APP/Contents/Resources/en.lproj" "$DIST_APP/Contents/Resources/zh-Hans.lproj"
 
-cp ".build/release/${APP_NAME}" "$DIST_APP/Contents/MacOS/${APP_NAME}"
+cp "${BIN_DIR}/${APP_NAME}" "$DIST_APP/Contents/MacOS/${APP_NAME}"
 cp "Info.plist" "$DIST_APP/Contents/Info.plist"
 printf '"CFBundleDisplayName" = "FreeDisplay";\n' > "$DIST_APP/Contents/Resources/en.lproj/InfoPlist.strings"
 printf '"CFBundleDisplayName" = "FreeDisplay";\n' > "$DIST_APP/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
@@ -92,6 +117,11 @@ EOF
 
 iconutil -c icns "$ICONSET_DIR" -o "$DIST_APP/Contents/Resources/AppIcon.icns"
 codesign --force --deep --sign - "$DIST_APP"
+
+if (( ! INSTALL )); then
+    echo "完成：已生成 $DIST_APP（未安装）。"
+    exit 0
+fi
 
 echo "==> [3/4] 安装到 /Applications 并配置命令行工具..."
 killall "$APP_NAME" 2>/dev/null || true

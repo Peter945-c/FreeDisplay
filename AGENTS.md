@@ -68,9 +68,12 @@ Rules for changing this repository. `CLAUDE.md` is a symlink to this file.
 - The release build has no warnings; keep it that way.
 
 ## Verification
-There is no test target and no CI. Run what your change touches and say what
-you could not run.
-- Build: `swift build -c release`.
+There is no test target. CI (`.github/workflows/ci.yml`) runs on every push to
+`master` and every pull request: a build with warnings as errors, a CLI smoke
+test, the universal package and its bundle checks. Run what your change touches
+and say what you could not run.
+- Build: `swift build -c release -Xswiftc -warnings-as-errors`; packaging:
+  `./build.sh --universal --no-install`.
 - CLI: `.build/release/FreeDisplay status`, `list --hidpi`, and `help` with
   `--lang en` and with `--lang zh`.
 - Mode switching needs a real external display. Note the starting mode with
@@ -84,8 +87,23 @@ you could not run.
 ## Commits, PRs and releases
 - Commits: short and imperative. PRs: summary, rationale, and how it was
   verified (which display, which macOS version).
+- A user-visible change adds a bullet under `## [Unreleased]` in
+  `CHANGELOG.md`; a release renames that heading to `## [X.Y.Z] - date`, and
+  the release notes are taken from that section.
 - A release bumps `CFBundleShortVersionString` and `CFBundleVersion` in
-  `Info.plist`; the build number only rises.
+  `Info.plist`; the build number only rises. Pushing the tag `vX.Y.Z`, equal to
+  `v` + `CFBundleShortVersionString`, runs `.github/workflows/release.yml`: it
+  builds the universal app, and `scripts/release/macos_package.py` signs it
+  with the Developer ID (hardened runtime, no entitlements), notarizes and
+  staples the app and the DMG, verifies the mounted DMG, and the workflow
+  publishes `FreeDisplay-X.Y.Z.dmg` with its SHA-256. Never reuse a tag.
+  Running the workflow by hand rehearses all of it without publishing.
+- Signing material never enters the repository. It lives in the Actions
+  secrets `MACOS_CERTIFICATE_P12_BASE64`, `MACOS_CERTIFICATE_PASSWORD` and
+  `APPLE_NOTARY_PRIVATE_KEY` and the variables `MACOS_SIGNING_IDENTITY`,
+  `APPLE_TEAM_ID`, `APPLE_NOTARY_KEY_ID` and `APPLE_NOTARY_ISSUER_ID`. The
+  Developer ID certificate expires on 2027-12-23: before the first release
+  after that, replace the two certificate secrets and `MACOS_SIGNING_IDENTITY`.
 - `docs/assets/` holds the README images. The English and Chinese demo GIFs
   change together, as whole files, each under 3 MB.
 - Never commit build output (`.build/`, `dist/`), recordings or secrets.

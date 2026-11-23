@@ -11,6 +11,8 @@
   <a href="https://www.apple.com/macos/"><img alt="macOS 13+" src="https://img.shields.io/badge/macOS-13%2B-000000?logo=apple&logoColor=white"></a>
   <a href="https://developer.apple.com/xcode/swiftui/"><img alt="SwiftUI" src="https://img.shields.io/badge/UI-SwiftUI-0D96F6?logo=swift&logoColor=white"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
+  <a href="https://github.com/acking-you/FreeDisplay/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/acking-you/FreeDisplay?logo=github&color=success"></a>
+  <a href="https://github.com/acking-you/FreeDisplay/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/acking-you/FreeDisplay/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/acking-you/FreeDisplay/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/acking-you/FreeDisplay?style=social"></a>
 </p>
 
@@ -61,7 +63,13 @@ macOS 为每台显示器维护一份显示模式列表。每一项包含逻辑�
 
 ## 快速开始
 
-需要 macOS 13 或更高版本，以及 Swift 5.9 或更高版本（Xcode 15 或 Command Line Tools）。
+**下载**：从 [Releases](https://github.com/acking-you/FreeDisplay/releases/latest) 下载 `FreeDisplay-<版本>.dmg`，打开后把 FreeDisplay 拖进「应用程序」。同一个安装包支持 Apple 芯片和 Intel Mac，需要 macOS 13 或更高版本，已用 Developer ID 签名并通过 Apple 公证。启动后点击菜单栏里的显示器图标，再点一个预设即可。需要命令行时，把应用里的可执行文件链接到 `PATH`：
+
+```bash
+ln -sf /Applications/FreeDisplay.app/Contents/MacOS/FreeDisplay /opt/homebrew/bin/freedisplay
+```
+
+**或者自行编译**，需要 Swift 5.9 或更高版本（Xcode 15 或 Command Line Tools）：
 
 ```bash
 git clone https://github.com/acking-you/FreeDisplay.git
@@ -69,7 +77,7 @@ cd FreeDisplay
 ./build.sh
 ```
 
-`build.sh` 会编译 Release 二进制，打包成带自动生成图标的 `FreeDisplay.app`，为本机做 ad hoc 签名，替换 `/Applications/FreeDisplay.app`（先退出正在运行的旧版），在 `/opt/homebrew/bin` 存在时把命令行链接为 `/opt/homebrew/bin/freedisplay`，然后启动应用。点击菜单栏里的显示器图标，再点一个预设即可。
+`build.sh` 会编译 Release 二进制，打包成带自动生成图标的 `FreeDisplay.app`，为本机做 ad hoc 签名，替换 `/Applications/FreeDisplay.app`（先退出正在运行的旧版），在 `/opt/homebrew/bin` 存在时把命令行链接为 `/opt/homebrew/bin/freedisplay`，然后启动应用。`./build.sh --universal --no-install` 只打包通用版 `dist/FreeDisplay.app`，不安装。
 
 命令行：
 
@@ -86,7 +94,7 @@ freedisplay reset                          # 亮度恢复 100%，关闭暖色
 
 ## 开发
 
-应用代码都在 `Sources/FreeDisplay/`：`SkyLightEngine.swift` 读取、应用显示模式并计算预设，`DisplayViewModel.swift` 保存应用状态和刷新率防黑屏逻辑，`MenuBarPopoverView.swift` 是菜单栏面板与主窗口共用的 SwiftUI 界面，`BrightnessController.swift` 负责 DDC/CI 和 gamma 表，`CLI.swift`、`Localization.swift`、`main.swift` 分别负责命令行、双语和启动流程。`build.sh` 负责打包和安装。修改时必须遵守的规则见 [AGENTS.md](AGENTS.md)。
+应用代码都在 `Sources/FreeDisplay/`：`SkyLightEngine.swift` 读取、应用显示模式并计算预设，`DisplayViewModel.swift` 保存应用状态和刷新率防黑屏逻辑，`MenuBarPopoverView.swift` 是菜单栏面板与主窗口共用的 SwiftUI 界面，`BrightnessController.swift` 负责 DDC/CI 和 gamma 表，`CLI.swift`、`Localization.swift`、`main.swift` 分别负责命令行、双语和启动流程。`build.sh` 负责打包和安装。CI 会编译每次推送和 PR；推送 `vX.Y.Z` 标签后，`scripts/release/macos_package.py` 生成签名并公证的 DMG 并发布（[更新日志](CHANGELOG.md)）。修改时必须遵守的规则见 [AGENTS.md](AGENTS.md)。
 
 ```bash
 swift build -c release
