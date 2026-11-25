@@ -92,7 +92,12 @@ Worth knowing:
 - **FreeDisplay chooses among modes macOS already has.** It does not add
   resolutions: no EDID override, no virtual display. If
   `freedisplay list --hidpi` prints nothing for a monitor, macOS offers it no
-  HiDPI mode and FreeDisplay cannot create one.
+  HiDPI mode and FreeDisplay cannot create one. Some Mac and display pairs get
+  integer scaling only: a 2560 × 1440 monitor with just 1280 × 720 HiDPI
+  (largest canvas 2560 × 1440) and nothing in between such as 2048 × 1152.
+  The panel and `freedisplay status` say so; when reporting one, include the
+  output of `freedisplay list --all`, which adds the modes macOS marks unsafe
+  and their flags.
 - **SkyLight is private API.** A macOS update can change it; if those calls go
   away, mode switching stops working until FreeDisplay is updated.
 - **The CLI changes the main display.** `status` lists every display, and the
@@ -136,6 +141,7 @@ From the terminal:
 ```bash
 freedisplay status                         # displays, current mode, HiDPI canvas, refresh rate
 freedisplay list --hidpi                   # HiDPI modes macOS offers for the main display
+freedisplay list --all                     # also the modes macOS marks unsafe, with flags, for bug reports
 freedisplay preset 125                     # 125 | 133 | 160 | 100
 freedisplay set 2048x1152 --hidpi --hz 144
 freedisplay brightness 80                  # 20–100

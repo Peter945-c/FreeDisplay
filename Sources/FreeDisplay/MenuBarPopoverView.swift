@@ -20,6 +20,9 @@ public struct MenuBarPopoverView: View {
 
             if let disp = vm.selectedDisplay {
                 currentStatusCard(disp)
+                if disp.fractionalHiDPIModes.isEmpty {
+                    integerScalingNotice(disp)
+                }
                 presetsSection(disp)
                 sliderAndModeControls(disp)
                 brightnessSection
@@ -149,6 +152,37 @@ public struct MenuBarPopoverView: View {
         }
         .padding(10)
         .background(Color.primary.opacity(0.05))
+        .cornerRadius(8)
+    }
+
+    // MARK: - Integer-only HiDPI Notice
+    // macOS decides which HiDPI modes a display gets. On some Mac and display pairs it offers only the 2× mode
+    // (1280 × 720 on a 2560 × 1440 panel), so no HiDPI preset exists; say why instead of leaving the panel looking broken.
+    private func integerScalingNotice(_ disp: DisplayDevice) -> some View {
+        let detail: String
+        if let m = disp.largestHiDPIMode {
+            detail = L10n.tr(
+                zh: "macOS 只为它提供了 \(m.width) × \(m.height) HiDPI（画布 \(m.pixelsWide) × \(m.pixelsHigh)），没有 125%、133%、160% 这类介于中间的 HiDPI 模式。FreeDisplay 只在系统已有的模式之间切换，不改 EDID、不建虚拟显示器，因此无法在这里开启。",
+                en: "macOS offers only \(m.width) × \(m.height) HiDPI for it (canvas \(m.pixelsWide) × \(m.pixelsHigh)), with nothing in between such as 125%, 133% or 160%. FreeDisplay only switches among the modes macOS provides, with no EDID changes or virtual displays, so it can't turn them on here."
+            )
+        } else {
+            detail = L10n.tr(
+                zh: "macOS 没有为它提供任何 HiDPI 模式。FreeDisplay 只在系统已有的模式之间切换，不改 EDID、不建虚拟显示器，因此无法在这里开启。",
+                en: "macOS offers no HiDPI mode for it. FreeDisplay only switches among the modes macOS provides, with no EDID changes or virtual displays, so it can't turn HiDPI on here."
+            )
+        }
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(L10n.tr(zh: "这台显示器只能整数倍缩放", en: "Integer scaling only on this display"))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.orange)
+            Text(detail)
+                .font(.system(size: 10.5))
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.10))
         .cornerRadius(8)
     }
 

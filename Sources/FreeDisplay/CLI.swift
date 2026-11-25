@@ -62,8 +62,34 @@ public enum CLIRunner {
                     print("  Refresh & BPC:  \(c.refreshRate)Hz · \(c.bitsPerChannel)-bit (Mode #\(c.modeNumber))")
                 }
             }
+            print(hiDPIScalesLine(d))
         }
         return 0
+    }
+
+    /// Which HiDPI sizes between 2× and native macOS offers, or why there are none (integer-only scaling).
+    private static func hiDPIScalesLine(_ d: DisplayDevice) -> String {
+        var seen = Set<String>()
+        let sizes = d.fractionalHiDPIModes
+            .sorted { $0.width > $1.width }
+            .map { "\($0.width)×\($0.height)" }
+            .filter { seen.insert($0).inserted }
+        if !sizes.isEmpty, let big = d.largestHiDPIMode {
+            return L10n.tr(
+                zh: "  HiDPI 缩放档位: \(sizes.joined(separator: "、"))（最大画布 \(big.pixelsWide)×\(big.pixelsHigh)）",
+                en: "  HiDPI Scales:   \(sizes.joined(separator: ", ")) (largest canvas \(big.pixelsWide)×\(big.pixelsHigh))"
+            )
+        }
+        if let m = d.largestHiDPIMode {
+            return L10n.tr(
+                zh: "  HiDPI 缩放档位: 无 — macOS 只提供 \(m.width)×\(m.height) HiDPI（画布 \(m.pixelsWide)×\(m.pixelsHigh)），缩放只能整数倍",
+                en: "  HiDPI Scales:   none — macOS only offers \(m.width)×\(m.height) HiDPI (canvas \(m.pixelsWide)×\(m.pixelsHigh)), so scaling is integer-only"
+            )
+        }
+        return L10n.tr(
+            zh: "  HiDPI 缩放档位: 无 — macOS 没有为这台显示器提供 HiDPI 模式",
+            en: "  HiDPI Scales:   none — macOS offers no HiDPI mode for this display"
+        )
     }
 
     private static func cmdList(args: [String]) -> Int32 {
@@ -73,6 +99,9 @@ public enum CLIRunner {
             return 1
         }
         let onlyHiDPI = args.contains("--hidpi")
+        if args.contains("--all") {
+            return listAllModes(d, onlyHiDPI: onlyHiDPI)
+        }
         print(L10n.tr(zh: "\(d.name) 可用安全显示模式:", en: "Safe display modes for \(d.name):"))
         for m in d.safeModes {
             if onlyHiDPI && !m.isHiDPI { continue }
@@ -92,6 +121,40 @@ public enum CLIRunner {
                          m.bitsPerChannel,
                          scaleWord,
                          pct))
+        }
+        return 0
+    }
+
+    /// Every mode macOS reports, unsafe ones included, with the raw flags: for bug reports from displays where the
+    /// expected HiDPI modes are missing. `set` and `preset` still only pick safe modes.
+    private static func listAllModes(_ d: DisplayDevice, onlyHiDPI: Bool) -> Int32 {
+        let modes = SkyLightEngine.shared.fetchAllModes(for: d.id).sorted {
+            if $0.width != $1.width { return $0.width > $1.width }
+            if $0.height != $1.height { return $0.height > $1.height }
+            if $0.isHiDPI != $1.isHiDPI { return $0.isHiDPI }
+            return $0.refreshRate > $1.refreshRate
+        }
+        print(L10n.tr(
+            zh: "\(d.name) 的全部显示模式（含 macOS 标为不安全的模式，仅供诊断，不能切换）:",
+            en: "All display modes for \(d.name), including the ones macOS marks unsafe (diagnostics only; these can't be applied):"
+        ))
+        for m in modes {
+            if onlyHiDPI && !m.isHiDPI { continue }
+            let mark = (d.currentMode?.modeNumber == m.modeNumber) ? "*" : " "
+            let tag = m.isHiDPI ? "HiDPI 2x" : "LoDPI 1x"
+            let safety = m.isSafe ? L10n.tr(zh: "安全  ", en: "safe  ") : L10n.tr(zh: "不安全", en: "unsafe")
+            print(String(format: "%@ [%3d] %-11s  %-8s  %@ %-11s  %3dHz  %2dbit  %@  flags 0x%08X  io 0x%08X",
+                         mark,
+                         m.modeNumber,
+                         ("\(m.width)x\(m.height)" as NSString).utf8String!,
+                         (tag as NSString).utf8String!,
+                         L10n.tr(zh: "画布", en: "Canvas"),
+                         ("\(m.pixelsWide)x\(m.pixelsHigh)" as NSString).utf8String!,
+                         m.refreshRate,
+                         m.bitsPerChannel,
+                         safety,
+                         m.flags,
+                         m.ioFlags))
         }
         return 0
     }
@@ -228,7 +291,8 @@ public enum CLIRunner {
             用法:
               freedisplay                         启动图形控制面板与菜单栏应用
               freedisplay status                  查看当前显示器规格、HiDPI 画布与刷新率状态
-              freedisplay list [--hidpi]          列出当前显示器支持的所有安全分辨率模式
+              freedisplay list [--hidpi] [--all]  列出当前显示器支持的所有安全分辨率模式
+                                                  --all 连同 macOS 标为不安全的模式及标志位一起列出，反馈问题时附上
               freedisplay preset <125|133|160|100> 一键切换黄金预设档位（如 125% 为 2048x1152 HiDPI）
               freedisplay set <宽x高> [--hidpi|--lodpi] [--hz <刷新率>]
                                                   切换到指定分辨率，例如:
@@ -247,7 +311,8 @@ public enum CLIRunner {
             Usage:
               freedisplay                         Launch GUI control panel & menu bar utility
               freedisplay status                  Show active display specs, HiDPI canvas & refresh rate
-              freedisplay list [--hidpi]          List all safe display modes for the monitor
+              freedisplay list [--hidpi] [--all]  List all safe display modes for the monitor
+                                                  --all also lists the modes macOS marks unsafe, with their flags, for bug reports
               freedisplay preset <125|133|160|100> Apply quick HiDPI scale preset (e.g. 125% -> 2048x1152 HiDPI)
               freedisplay set <WxH> [--hidpi|--lodpi] [--hz <rate>]
                                                   Switch to a specific resolution, e.g.:

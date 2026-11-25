@@ -9,6 +9,12 @@ its section here.
 - **The panel stays on screen after a mode switch** — switching the
   resolution of the display the menu bar panel is on no longer leaves the
   panel partly off-screen; it re-anchors under the menu bar icon (#1).
+- **Integer-only displays are explained** — when macOS offers no HiDPI mode
+  between 2× and native for a display (only 1280 × 720 HiDPI on a
+  2560 × 1440 panel, for example), the panel and `freedisplay status` say so
+  instead of just showing no HiDPI presets.
+- **`freedisplay list --all`** also lists the modes macOS marks unsafe, with
+  their flags, to attach to bug reports.
 
 ## [1.1.0] - 2026-11-23
 

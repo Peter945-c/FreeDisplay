@@ -56,7 +56,7 @@ macOS 为每台显示器维护一份显示模式列表。每一项包含逻辑�
 
 需要了解的边界：
 
-- **FreeDisplay 只在 macOS 已有的模式之间切换。** 它不新增分辨率：不改 EDID，不建虚拟显示器。如果 `freedisplay list --hidpi` 对某台显示器什么都没列出，说明 macOS 没有为它提供 HiDPI 模式，FreeDisplay 也无法凭空创建。
+- **FreeDisplay 只在 macOS 已有的模式之间切换。** 它不新增分辨率：不改 EDID，不建虚拟显示器。如果 `freedisplay list --hidpi` 对某台显示器什么都没列出，说明 macOS 没有为它提供 HiDPI 模式，FreeDisplay 也无法凭空创建。有些 Mac 和显示器的组合只有整数倍缩放，例如 2560 × 1440 显示器只有 1280 × 720 HiDPI（最大画布 2560 × 1440），没有 2048 × 1152 这类中间档位；这时面板和 `freedisplay status` 会直接说明，反馈问题时请附上 `freedisplay list --all` 的输出（包括 macOS 标为不安全的模式和标志位）。
 - **SkyLight 是私有 API。** macOS 更新可能改动它；一旦这些调用不可用，模式切换就会失效，直到 FreeDisplay 跟进更新。
 - **命令行修改的是主显示器。** `status` 会列出所有显示器；连接多台显示器时，面板里有显示器选择器。
 - **硬件亮度需要通过 `IOAVService` 走 DDC/CI**，这是 Apple 芯片 Mac 与显示器通信的途径。其他情况下（以及开启暖色时），亮度通过 gamma 表实现：调暗的是画面而不是背光，其他写 gamma 表的应用（f.lux、校色工具）可能覆盖它。
@@ -84,6 +84,7 @@ cd FreeDisplay
 ```bash
 freedisplay status                         # 显示器、当前模式、HiDPI 画布、刷新率
 freedisplay list --hidpi                   # macOS 为主显示器提供的 HiDPI 模式
+freedisplay list --all                     # 含 macOS 标为不安全的模式及标志位，反馈问题时附上
 freedisplay preset 125                     # 125 | 133 | 160 | 100
 freedisplay set 2048x1152 --hidpi --hz 144
 freedisplay brightness 80                  # 20–100

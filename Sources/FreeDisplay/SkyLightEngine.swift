@@ -53,6 +53,21 @@ public struct DisplayDevice: Identifiable, Equatable {
         return Int((Double(nativeWidth) / Double(logicalWidth) * 100.0).rounded())
     }
 
+    /// HiDPI modes between the integer 2× mode and native (2048, 1920 and 1600 wide on a 2560 panel): the only way to
+    /// get larger text that stays sharp. macOS decides whether a display gets any; when it offers only the 2× mode
+    /// (1280 × 720 on a 2560 × 1440 panel), scaling is integer-only and FreeDisplay has nothing to switch to.
+    public var fractionalHiDPIModes: [DisplayModeItem] {
+        safeModes.filter {
+            $0.isHiDPI && abs($0.aspectRatio - nativeAspectRatio) < 0.04
+                && $0.width * 2 > nativeWidth + 8 && $0.width < nativeWidth - 8
+        }
+    }
+
+    /// The HiDPI mode with the largest canvas macOS offers for this display, if any.
+    public var largestHiDPIMode: DisplayModeItem? {
+        safeModes.filter { $0.isHiDPI }.max { $0.pixelsWide * $0.pixelsHigh < $1.pixelsWide * $1.pixelsHigh }
+    }
+
     public var allRefreshRates: [Int] {
         Array(Set(safeModes.map { $0.refreshRate })).filter { $0 > 0 }.sorted(by: >)
     }
