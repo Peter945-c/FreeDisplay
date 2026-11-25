@@ -72,13 +72,18 @@ whole app is about 1.5 MB.
   display with HiDPI modes and have the monitor mirror it, so the presets
   work again. It costs HDR and a little GPU time, lasts only while
   FreeDisplay runs, and switches back after 15 seconds unless you keep it.
+- **Updates itself** — checks GitHub Releases once a day (turn it off or
+  check by hand at the bottom of the panel) and, with one click, downloads
+  the new version with a progress bar and speed, checks its SHA-256 and that
+  it is signed by the same Developer ID team, replaces the app and reopens
+  it.
 - **A command line** — `freedisplay status | list | preset | set | brightness |
   reset`, for scripts and shortcuts.
 - **Chinese and English** — the app and the CLI follow the macOS language;
   `--lang en` or `--lang zh` overrides it.
 - **Small and local** — Swift, AppKit and SwiftUI with no dependencies; no
-  helper daemon, no network access, no account. Launch at login uses the
-  system's login-item service.
+  helper daemon, no account, and no network access except the update check
+  against GitHub. Launch at login uses the system's login-item service.
 
 ## How it works
 
@@ -121,6 +126,7 @@ Worth knowing:
 [Releases](https://github.com/acking-you/FreeDisplay/releases/latest), open it
 and drag FreeDisplay to Applications. It is one app for Apple silicon and Intel
 Macs with macOS 13 or later, signed with a Developer ID and notarized by Apple.
+Later versions install from the panel's update card, without the DMG.
 Start it, click the display icon in the menu bar, then a preset. For the
 command line, link the app's binary onto your `PATH`:
 

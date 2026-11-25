@@ -47,9 +47,10 @@
 - **刷新率防黑屏** —— 在刷新率菜单里改刷新率只对本次会话生效；10 秒内确认才保留，否则自动回到原模式。分辨率修改会保存，重启后依然有效。
 - **亮度与护眼暖色** —— 显示器响应 DDC/CI 时直接调硬件亮度（20%–100%），否则改用显示器的 gamma 表；暖色 0%–50%，适合夜间。两者都会记住，显示器配置变化后自动重新应用。
 - **虚拟屏兜底（实验性）** —— 当 macOS 没有给显示器任何介于 2 倍和原生之间的 HiDPI 档位时（例如 2560 × 1440 面板只有 1280 × 720 HiDPI），面板会提供一键新建带 HiDPI 模式的虚拟屏、让显示器镜像它，预设就又能用了。代价是不支持 HDR、GPU 占用略高，只在 FreeDisplay 运行时有效；开启后 15 秒内不确认会自动还原。
+- **自动更新** —— 每天检查一次 GitHub Releases（可以在面板底部关闭，或手动检查）。一键即可下载新版本，下载时显示进度条和网速，随后校验 SHA-256 和 Developer ID 开发者签名，替换应用并自动重启。
 - **命令行** —— `freedisplay status | list | preset | set | brightness | reset`，方便脚本和快捷指令调用。
 - **中英双语** —— 应用和命令行跟随 macOS 系统语言；`--lang zh` 或 `--lang en` 可手动指定。
-- **小巧、纯本地** —— 用 Swift、AppKit、SwiftUI 编写，无第三方依赖；没有后台守护进程，不联网，无需账号。开机自启使用系统的登录项服务。
+- **小巧、纯本地** —— 用 Swift、AppKit、SwiftUI 编写，无第三方依赖；没有后台守护进程，无需账号；除了向 GitHub 检查更新，不联网。开机自启使用系统的登录项服务。
 
 ## 工作原理
 
@@ -64,7 +65,7 @@ macOS 为每台显示器维护一份显示模式列表。每一项包含逻辑�
 
 ## 快速开始
 
-**下载**：从 [Releases](https://github.com/acking-you/FreeDisplay/releases/latest) 下载 `FreeDisplay-<版本>.dmg`，打开后把 FreeDisplay 拖进「应用程序」。同一个安装包支持 Apple 芯片和 Intel Mac，需要 macOS 13 或更高版本，已用 Developer ID 签名并通过 Apple 公证。启动后点击菜单栏里的显示器图标，再点一个预设即可。需要命令行时，把应用里的可执行文件链接到 `PATH`：
+**下载**：从 [Releases](https://github.com/acking-you/FreeDisplay/releases/latest) 下载 `FreeDisplay-<版本>.dmg`，打开后把 FreeDisplay 拖进「应用程序」。同一个安装包支持 Apple 芯片和 Intel Mac，需要 macOS 13 或更高版本，已用 Developer ID 签名并通过 Apple 公证。之后的版本可以直接在面板的更新卡片里安装，不用再下载 DMG。启动后点击菜单栏里的显示器图标，再点一个预设即可。需要命令行时，把应用里的可执行文件链接到 `PATH`：
 
 ```bash
 ln -sf /Applications/FreeDisplay.app/Contents/MacOS/FreeDisplay /opt/homebrew/bin/freedisplay

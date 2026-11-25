@@ -107,6 +107,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
 
+        Updater.shared.start()
+
         if !startSilently {
             showMainWindow()
         }
@@ -184,6 +186,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         viewModel.refreshDisplays()
+        Updater.shared.checkIfDue()
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()

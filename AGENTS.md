@@ -38,6 +38,13 @@ Rules for changing this repository. `CLAUDE.md` is a symlink to this file.
   which re-runs that first layout.
 - `BrightnessController` owns DDC/CI (`IOAVService`, VCP 0x10, loaded with
   `dlsym`) and the gamma table.
+- `Updater.swift` is the only code that uses the network. It reads the latest
+  release from the GitHub API, downloads `FreeDisplay-X.Y.Z.dmg` with progress
+  and speed, checks it against `FreeDisplay-X.Y.Z.dmg.sha256`, copies the app
+  out with `hdiutil`/`ditto`, and accepts it only if it meets the Developer ID
+  requirement for the running app's team ID with the release's identifier and
+  version. A detached shell script swaps the bundle after the app quits
+  (restoring the old one if the copy fails) and reopens it.
 
 ## Behavior invariants
 - Offer only modes macOS reports and marks safe (`DisplayModeItem.isSafe`).
@@ -59,16 +66,27 @@ Rules for changing this repository. `CLAUDE.md` is a symlink to this file.
   slider, the HiDPI switch and the mode list keep the current refresh rate
   when the target mode offers it and apply `.permanently`. A new control
   whose main job is changing the refresh rate uses the confirmed path.
+- The network is used only by `Updater`, only to reach GitHub (the releases
+  API and that release's assets), and only when automatic checks are on (the
+  default, at most once a day) or the user asks. A build without a team ID
+  (a local ad hoc build) or in a location it can't write never replaces
+  itself; it opens the release page instead.
 - Brightness stays within 20–100 and warmth within 0–50. DDC/CI is used only
   while warmth is off, the gamma table otherwise, and `reset` restores the
   ColorSync settings.
 - The bundle identifier `local.opensource.FreeDisplay`, the distributed
   notification `local.opensource.FreeDisplay.showPopover`, the UserDefaults
-  keys `FreeDisplay.softwareBrightness`, `FreeDisplay.softwareWarmth` and
-  `FreeDisplay.virtualHiDPIDisplays`, and the virtual display's vendor ID
-  `0xF0D1` are installed state: renaming one breaks existing installs (the
-  second-launch handoff, saved values, the login item, the panels the
-  fallback was kept on).
+  keys `FreeDisplay.softwareBrightness`, `FreeDisplay.softwareWarmth`,
+  `FreeDisplay.virtualHiDPIDisplays`, `FreeDisplay.autoCheckUpdates`,
+  `FreeDisplay.lastUpdateCheck` and `FreeDisplay.updatedFrom`, and the virtual
+  display's vendor ID `0xF0D1` are installed state: renaming one breaks
+  existing installs (the second-launch handoff, saved values, the login item,
+  the panels the fallback was kept on).
+- Installed copies update themselves from the repository
+  `acking-you/FreeDisplay`, the tag `vX.Y.Z`, the assets
+  `FreeDisplay-X.Y.Z.dmg` and `FreeDisplay-X.Y.Z.dmg.sha256`, `FreeDisplay.app`
+  at the root of the DMG, and the Developer ID team. Changing any of them
+  stops existing installs from updating.
 - The app is `LSUIElement` with the `.accessory` activation policy, so it has
   no Dock icon; closing the window leaves it running in the menu bar.
 
@@ -83,7 +101,7 @@ Rules for changing this repository. `CLAUDE.md` is a symlink to this file.
 - Swift tools 5.9 and macOS 13: `Package.swift` and `LSMinimumSystemVersion`
   in `Info.plist` change together.
 - No third-party dependencies; system frameworks only (AppKit, SwiftUI,
-  CoreGraphics, IOKit, ServiceManagement).
+  CoreGraphics, IOKit, ServiceManagement, Security, CryptoKit).
 - The release build has no warnings; keep it that way.
 
 ## Verification
@@ -107,6 +125,11 @@ and say what you could not run.
   check that `status` is back to the starting mode with no extra display. A
   display with native fractional HiDPI never offers it; test it there through
   a harness that calls `DisplayViewModel.enableVirtualHiDPI()`.
+- Updates: test `Updater` from a harness (inside `NSApplication.run`) with a
+  lower `currentVersion`, the release's team ID and a temporary `appURL`: it
+  exercises the check, the download, the checksum, the signature and the
+  swap without touching `/Applications`. Also feed `prepare` a corrupted DMG
+  and a wrong team ID; both must be refused.
 - UI: `./build.sh` replaces `/Applications/FreeDisplay.app` and starts it;
   run it only when installing is what the user wants, then check the popover
   in both languages.

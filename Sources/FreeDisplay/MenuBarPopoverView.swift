@@ -3,16 +3,25 @@ import AppKit
 
 public struct MenuBarPopoverView: View {
     @ObservedObject var vm: DisplayViewModel
+    @ObservedObject var updater: Updater
     @State private var showAllModes: Bool = false
 
+    @MainActor
     public init(vm: DisplayViewModel) {
+        self.init(vm: vm, updater: Updater.shared)
+    }
+
+    init(vm: DisplayViewModel, updater: Updater) {
         self.vm = vm
+        self.updater = updater
     }
 
     public var body: some View {
         let _ = vm.language
         VStack(alignment: .leading, spacing: 12) {
             headerSection
+
+            updateCard
 
             if vm.pendingRevertSeconds > 0 {
                 safetyRevertBanner
@@ -513,6 +522,159 @@ public struct MenuBarPopoverView: View {
         }
     }
 
+    // MARK: - Updates
+    private static func bytes(_ count: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: count, countStyle: .file)
+    }
+
+    @ViewBuilder
+    private var updateCard: some View {
+        switch updater.state {
+        case .available(let release):
+            updateCardBox(tint: .accentColor) {
+                Text(L10n.tr(zh: "发现新版本 v\(release.version)", en: "FreeDisplay \(release.version) is available"))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.accentColor)
+                Text(updater.canInstallInPlace
+                     ? L10n.tr(
+                        zh: "当前 v\(updater.currentVersion)。更新会下载 \(Self.bytes(release.dmgSize))，校验 SHA-256 和开发者签名后替换应用并自动重启。",
+                        en: "You have \(updater.currentVersion). Updating downloads \(Self.bytes(release.dmgSize)), checks its SHA-256 and developer signature, replaces the app and reopens it.")
+                     : L10n.tr(
+                        zh: "当前 v\(updater.currentVersion)。这个副本无法自行替换（开发版、只读位置或没有写权限），请从下载页更新。",
+                        en: "You have \(updater.currentVersion). This copy can't replace itself (a development build, a read-only location or no write access); update from the download page."))
+                    .font(.system(size: 10.5))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 10) {
+                    Button(updater.canInstallInPlace
+                           ? L10n.tr(zh: "更新并重启", en: "Update and Reopen")
+                           : L10n.tr(zh: "前往下载页", en: "Open Download Page")) {
+                        updater.install(release)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    Button(L10n.tr(zh: "更新说明", en: "Release Notes")) {
+                        NSWorkspace.shared.open(release.pageURL)
+                    }
+                    .buttonStyle(.link)
+                    .font(.system(size: 11))
+                }
+            }
+        case .downloading(let release, let received, let total, let speed):
+            updateCardBox(tint: .accentColor) {
+                HStack {
+                    Text(L10n.tr(zh: "正在下载 v\(release.version)", en: "Downloading \(release.version)"))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.accentColor)
+                    Spacer()
+                    Button(L10n.tr(zh: "取消", en: "Cancel")) {
+                        updater.cancelDownload()
+                    }
+                    .buttonStyle(.link)
+                    .font(.system(size: 11))
+                }
+                ProgressView(value: Double(min(received, total)), total: Double(max(total, 1)))
+                HStack {
+                    Text("\(Self.bytes(received)) / \(Self.bytes(total))")
+                    Spacer()
+                    if speed > 1 {
+                        let left = Int((Double(max(total - received, 0)) / speed).rounded(.up))
+                        Text(L10n.tr(
+                            zh: "\(Self.bytes(Int64(speed)))/s · 剩余 \(left) 秒",
+                            en: "\(Self.bytes(Int64(speed)))/s · \(left) s left"
+                        ))
+                    } else {
+                        Text(L10n.tr(zh: "正在连接…", en: "Connecting…"))
+                    }
+                }
+                .font(.system(size: 10.5, design: .monospaced))
+                .foregroundColor(.secondary)
+            }
+        case .installing(let release):
+            updateCardBox(tint: .accentColor) {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(L10n.tr(
+                        zh: "正在校验并安装 v\(release.version)，FreeDisplay 将自动重启…",
+                        en: "Verifying and installing \(release.version); FreeDisplay will reopen…"
+                    ))
+                    .font(.system(size: 10.5))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        case .failed(let message, let release):
+            updateCardBox(tint: .orange) {
+                Text(message)
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundColor(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 10) {
+                    if let release = release {
+                        Button(L10n.tr(zh: "前往下载页", en: "Open Download Page")) {
+                            NSWorkspace.shared.open(release.pageURL)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    Button(L10n.tr(zh: "关闭", en: "Dismiss")) {
+                        updater.dismissFailure()
+                    }
+                    .buttonStyle(.link)
+                    .font(.system(size: 11))
+                }
+            }
+        default:
+            if let from = updater.justUpdatedFrom {
+                updateCardBox(tint: .green) {
+                    Text(L10n.tr(
+                        zh: "已更新到 v\(updater.currentVersion)（原 v\(from)）",
+                        en: "Updated to \(updater.currentVersion) (was \(from))"
+                    ))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.green)
+                }
+            }
+        }
+    }
+
+    private func updateCardBox<Content: View>(tint: Color, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6, content: content)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(tint.opacity(0.10))
+            .cornerRadius(8)
+    }
+
+    private var updateRow: some View {
+        HStack(spacing: 8) {
+            Text("v\(updater.currentVersion)")
+                .font(.system(size: 10.5, design: .monospaced))
+                .foregroundColor(.secondary)
+            Toggle(L10n.tr(zh: "自动检查更新", en: "Check Automatically"), isOn: $updater.autoCheck)
+                .toggleStyle(.checkbox)
+                .font(.system(size: 11))
+            Spacer()
+            switch updater.state {
+            case .checking:
+                ProgressView().controlSize(.mini)
+                Text(L10n.tr(zh: "正在检查…", en: "Checking…"))
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            case .upToDate:
+                Text(L10n.tr(zh: "已是最新版本", en: "Up to date"))
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            default:
+                Button(L10n.tr(zh: "检查更新", en: "Check for Updates")) {
+                    Task { await updater.check(userInitiated: true) }
+                }
+                .buttonStyle(.link)
+                .font(.system(size: 11))
+            }
+        }
+    }
+
     // MARK: - Footer
     private var footerSection: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -521,6 +683,10 @@ public struct MenuBarPopoverView: View {
                     .font(.system(size: 10.5, weight: .medium))
                     .foregroundColor(.accentColor)
                     .lineLimit(1)
+            }
+
+            if updater.isEnabled {
+                updateRow
             }
 
             HStack {

@@ -6,6 +6,14 @@ its section here.
 
 ## [Unreleased]
 
+- **In-app updates** — FreeDisplay checks GitHub Releases once a day (or when
+  you ask, from the bottom of the panel, where the check can also be turned
+  off) and installs a new version with one click: it downloads the DMG with a
+  progress bar and speed, checks its SHA-256 and that the app is signed by
+  the same Developer ID team, replaces itself and reopens. A copy that can't
+  replace itself opens the release page instead.
+- **The panel shows the app's version**, next to the update controls.
+
 ## [1.2.1] - 2026-11-26
 
 - **The menu bar panel opens in full again** — it no longer opens with its
