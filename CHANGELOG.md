@@ -6,6 +6,8 @@ its section here.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-26
+
 - **In-app updates are ready for newer macOS** — macOS 27 deprecates
   `hdiutil attach`, which the updater mounts the downloaded DMG with; when
   it fails, the updater now mounts it with `diskutil image attach` instead.
