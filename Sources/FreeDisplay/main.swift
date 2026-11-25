@@ -43,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: NSPopover!
     private var mainWindow: NSWindow!
     private var viewModel: DisplayViewModel!
+    private var reanchorWork: DispatchWorkItem?
     private let startSilently: Bool
 
     init(startSilently: Bool = false) {
@@ -57,7 +58,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let pop = NSPopover()
         pop.behavior = .transient
         pop.animates = true
-        pop.contentViewController = NSHostingController(rootView: MenuBarPopoverView(vm: viewModel))
+        let popoverHost = NSHostingController(rootView: MenuBarPopoverView(vm: viewModel))
+        // Let the popover own its size. With the default sizing, the panel's first layout and later height changes
+        // resize the popover window from its bottom edge, pushing the top above the screen (issue #1); with
+        // .preferredContentSize, NSPopover keeps the arrow under the status item and grows downward.
+        popoverHost.sizingOptions = .preferredContentSize
+        pop.contentViewController = popoverHost
         self.popover = pop
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -128,25 +134,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showMainWindow()
     }
 
-    /// Switching the mode of the screen the panel is on changes that screen's size and position, but AppKit keeps
-    /// the popover and the window where they were, so part of them can end up off-screen (issue #1). Once the menu
-    /// bar has settled, re-anchor the popover under the status item and pull the window back onto its screen.
+    /// Switching the mode of the screen the panel is on moves the menu bar. NSPopover normally follows the status
+    /// item; as a safety net, once the screens have settled, re-anchor it in place (never close and reopen it: a
+    /// fresh show re-runs the first layout) and keep the window on its screen (issue #1).
     @objc private func screenParametersChanged(_ note: Notification) {
-        Task { @MainActor [weak self] in
-            guard let self = self else { return }
-            if self.popover.isShown, let button = self.statusItem.button {
-                let animates = self.popover.animates
-                self.popover.animates = false
-                self.popover.close()
-                self.popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-                self.popover.contentViewController?.view.window?.makeKey()
-                self.popover.animates = animates
-            }
-            if self.mainWindow.isVisible, let screen = self.mainWindow.screen ?? NSScreen.main {
-                let frame = self.mainWindow.constrainFrameRect(self.mainWindow.frame, to: screen)
-                if frame != self.mainWindow.frame {
-                    self.mainWindow.setFrame(frame, display: true)
-                }
+        reanchorWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated { self?.reanchorAfterScreenChange() }
+        }
+        reanchorWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+    }
+
+    private func reanchorAfterScreenChange() {
+        if popover.isShown, let button = statusItem.button {
+            popover.positioningRect = button.bounds
+        }
+        if mainWindow.isVisible, let screen = mainWindow.screen ?? NSScreen.main {
+            let frame = mainWindow.constrainFrameRect(mainWindow.frame, to: screen)
+            if frame != mainWindow.frame {
+                mainWindow.setFrame(frame, display: true)
             }
         }
     }

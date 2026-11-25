@@ -6,6 +6,12 @@ its section here.
 
 ## [Unreleased]
 
+- **The menu bar panel opens in full again** — it no longer opens with its
+  top cut off above the screen, and it stays under the menu bar icon when
+  its height changes or the display it is on switches mode. 1.2.0 made this
+  worse by reopening the panel after every display change; now NSPopover
+  sizes the panel from its arrow and is only re-anchored in place (#1).
+
 ## [1.2.0] - 2026-11-26
 
 - **Virtual-display HiDPI fallback (experimental)** — for a monitor macOS

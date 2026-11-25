@@ -31,6 +31,11 @@ Rules for changing this repository. `CLAUDE.md` is a symlink to this file.
 - `DisplayViewModel` (`@MainActor`) owns the app state. `MenuBarPopoverView`
   is shown both in the menu-bar popover and in the standalone window; it is
   one view, so change it once.
+- The popover's `NSHostingController` uses `sizingOptions = .preferredContentSize`,
+  so NSPopover sizes the panel from its arrow. With the default sizing, the
+  first layout and later height changes push the panel's top above the
+  screen. To reposition it, set `positioningRect`; never close and reopen it,
+  which re-runs that first layout.
 - `BrightnessController` owns DDC/CI (`IOAVService`, VCP 0x10, loaded with
   `dlsym`) and the gamma table.
 
