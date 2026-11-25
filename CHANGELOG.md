@@ -6,6 +6,8 @@ its section here.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-26
+
 - **Virtual-display HiDPI fallback (experimental)** — for a monitor macOS
   gives no HiDPI mode between 2× and native, the panel can create a virtual
   display with HiDPI modes and have the monitor mirror it, so 2048 × 1152 and
