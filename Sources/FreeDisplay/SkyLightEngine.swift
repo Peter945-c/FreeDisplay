@@ -19,6 +19,8 @@ public struct DisplayModeItem: Identifiable, Equatable, Hashable {
     public var isSafe: Bool { (ioFlags & 0x00000002) != 0 && (flags & 0x00000001) != 0 }
     public var isNativePanel: Bool { (ioFlags & 0x02000000) != 0 && !isHiDPI }
     public var isDefault: Bool { (flags & 0x00000004) != 0 }
+    /// Bits per channel of the mode's framebuffer, inferred from the mode record's depth field (an observed mapping).
+    /// It is not the bit depth on the cable or the panel's native depth, which can be lower; say "framebuffer" with it.
     public var bitsPerChannel: Int { depth >= 8 ? 10 : 8 }
     public var aspectRatio: Double { height > 0 ? Double(width) / Double(height) : 0.0 }
     public var resolutionText: String { "\(width) × \(height)" }

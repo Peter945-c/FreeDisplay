@@ -156,11 +156,15 @@ public struct MenuBarPopoverView: View {
 
                 if let c = cur {
                     Text(L10n.tr(
-                        zh: "等效 \(scalePct)% 缩放 · 渲染画布 \(c.framebufferText) · \(c.bitsPerChannel)-bit",
-                        en: "\(scalePct)% UI Scale · Canvas \(c.framebufferText) · \(c.bitsPerChannel)-bit"
+                        zh: "等效 \(scalePct)% 缩放 · 渲染画布 \(c.framebufferText) · 帧缓冲 \(c.bitsPerChannel)-bit",
+                        en: "\(scalePct)% UI Scale · Canvas \(c.framebufferText) · \(c.bitsPerChannel)-bit framebuffer"
                     ))
                     .font(.system(size: 10.5))
                     .foregroundColor(.secondary)
+                    .help(L10n.tr(
+                        zh: "macOS 为这个模式分配的帧缓冲位深。线缆上实际传输的位深和面板的原生位深可能更低，以显示器菜单里的信号信息为准。",
+                        en: "The framebuffer depth macOS uses for this mode. The bit depth on the cable and the panel's native depth can be lower; the monitor's own menu shows the signal it receives."
+                    ))
                 }
             }
             Spacer()
@@ -406,7 +410,7 @@ public struct MenuBarPopoverView: View {
     private var brightnessSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(BrightnessController.shared.supportsHardwareDDC
+                Text(vm.hardwareDDC
                      ? L10n.tr(zh: "屏幕亮度（硬件 DDC）", en: "Brightness (Hardware DDC)")
                      : L10n.tr(zh: "屏幕亮度与护眼调节", en: "Brightness & Eye Care"))
                     .font(.system(size: 11, weight: .semibold))

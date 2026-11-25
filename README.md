@@ -55,17 +55,17 @@ whole app is about 1.5 MB.
   UI-scale slider over the modes with the panel's aspect ratio, a HiDPI
   switch, a refresh-rate menu, and a list of every safe mode at the current
   refresh rate with its canvas size (`freedisplay list` adds the other refresh
-  rates and the color depth).
+  rates and the framebuffer bit depth).
 - **Your refresh rate stays** — changing the scale keeps the current refresh
   rate (144 Hz stays 144 Hz) whenever the new mode offers it, and prefers the
-  variant with the deepest color.
+  variant with the highest framebuffer bit depth.
 - **A safety net for refresh rates** — a rate chosen from the refresh-rate
   menu holds for the session only; keep it within 10 seconds or the previous
   mode comes back. Resolution changes are saved and survive a restart.
-- **Brightness and warmth** — brightness from 20 to 100% over DDC/CI when the
-  monitor answers, through the display's gamma table otherwise, and a warm
-  tint from 0 to 50% for the evening. Both are remembered and applied again
-  after a display change.
+- **Brightness and warmth, per display** — brightness from 20 to 100% over
+  DDC/CI when the monitor answers, through its gamma table otherwise, and a
+  warm tint from 0 to 50% for the evening. Each display remembers its own,
+  and they are applied again after a display change.
 - **A virtual-display fallback (experimental)** — when macOS gives a monitor
   no HiDPI mode between 2× and native (only 1280 × 720 HiDPI on a
   2560 × 1440 panel, for example), the popover offers to create a virtual
@@ -115,7 +115,9 @@ Worth knowing:
 - **The CLI changes the main display.** `status` lists every display, and the
   popover has a display picker when more than one is connected.
 - **Hardware brightness needs DDC/CI through `IOAVService`**, the route Apple
-  silicon Macs use to talk to a monitor. Otherwise, and whenever warmth is on,
+  silicon Macs use to talk to a monitor. FreeDisplay sends it only to a
+  monitor it can match to its own service in the I/O Registry; one it can't
+  match is dimmed through gamma. Otherwise, and whenever warmth is on,
   brightness is a gamma table: it dims the picture, not the backlight, and
   other apps that write gamma tables (f.lux, calibration tools) can override
   it.

@@ -7,9 +7,18 @@ import Combine
 @MainActor
 public final class DisplayViewModel: ObservableObject {
     @Published public var displays: [DisplayDevice] = []
-    @Published public var selectedDisplayID: CGDirectDisplayID = CGMainDisplayID()
+    @Published public var selectedDisplayID: CGDirectDisplayID = CGMainDisplayID() {
+        didSet {
+            if selectedDisplayID != oldValue {
+                loadColorSettings()
+            }
+        }
+    }
+    // Brightness and warmth of the selected display; each display keeps its own (BrightnessController).
     @Published public var brightness: Double = 100.0
     @Published public var warmth: Double = 0.0
+    /// Whether the selected display takes brightness over DDC/CI.
+    @Published public private(set) var hardwareDDC: Bool = false
     @Published public var launchAtLogin: Bool = false
     @Published public var statusMessage: String? = nil
     @Published public var language: AppLanguage = L10n.current
@@ -30,20 +39,12 @@ public final class DisplayViewModel: ObservableObject {
     private var localeObserver: NSObjectProtocol?
 
     public init() {
-        brightness = BrightnessController.shared.savedBrightness()
-        warmth = BrightnessController.shared.savedWarmth()
         launchAtLogin = (SMAppService.mainApp.status == .enabled)
         language = L10n.current
         refreshDisplays()
-
-        if brightness < 99.5 || warmth > 0.5 {
-            BrightnessController.shared.setColorTable(
-                displayID: colorTargetID,
-                brightnessPercent: brightness,
-                warmthPercent: warmth,
-                persist: false
-            )
-        }
+        BrightnessController.shared.adoptLegacySettings(for: colorTargetID)
+        BrightnessController.shared.reapply(to: colorDisplayIDs)
+        loadColorSettings()
 
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -54,14 +55,8 @@ public final class DisplayViewModel: ObservableObject {
                 guard let self = self else { return }
                 self.refreshDisplays()
                 self.syncVirtualHiDPI()
-                if self.brightness < 99.5 || self.warmth > 0.5 {
-                    BrightnessController.shared.setColorTable(
-                        displayID: self.colorTargetID,
-                        brightnessPercent: self.brightness,
-                        warmthPercent: self.warmth,
-                        persist: false
-                    )
-                }
+                BrightnessController.shared.reapply(to: self.colorDisplayIDs)
+                self.loadColorSettings()
             }
         }
 
@@ -129,12 +124,24 @@ public final class DisplayViewModel: ObservableObject {
 
     public var virtualHiDPIAvailable: Bool { VirtualDisplayEngine.shared.isAvailable }
 
-    /// The display brightness and warmth act on: the real panel, also while it mirrors the virtual HiDPI display.
-    private var colorTargetID: CGDirectDisplayID {
-        if let s = VirtualDisplayEngine.shared.session, selectedDisplayID == s.virtualID {
+    /// The display brightness and warmth act on for an entry of `displays`: the real panel, also while it mirrors
+    /// the virtual HiDPI display.
+    private func colorID(for id: CGDirectDisplayID) -> CGDirectDisplayID {
+        if let s = VirtualDisplayEngine.shared.session, id == s.virtualID {
             return s.physicalID
         }
-        return selectedDisplayID
+        return id
+    }
+
+    private var colorTargetID: CGDirectDisplayID { colorID(for: selectedDisplayID) }
+
+    private var colorDisplayIDs: [CGDirectDisplayID] { displays.map { colorID(for: $0.id) } }
+
+    private func loadColorSettings() {
+        let saved = BrightnessController.shared.settings(for: colorTargetID)
+        brightness = saved.brightness
+        warmth = saved.warmth
+        hardwareDDC = BrightnessController.shared.supportsHardwareDDC(for: colorTargetID)
     }
 
     /// Turns the virtual-display fallback on for the selected display. It is undone after 15 seconds unless the user
@@ -346,26 +353,18 @@ public final class DisplayViewModel: ObservableObject {
 
     public func updateBrightness(_ newVal: Double) {
         brightness = newVal
-        BrightnessController.shared.setColorTable(
-            displayID: colorTargetID,
-            brightnessPercent: brightness,
-            warmthPercent: warmth
-        )
+        BrightnessController.shared.set(.init(brightness: brightness, warmth: warmth), for: colorTargetID)
     }
 
     public func updateWarmth(_ newVal: Double) {
         warmth = newVal
-        BrightnessController.shared.setColorTable(
-            displayID: colorTargetID,
-            brightnessPercent: brightness,
-            warmthPercent: warmth
-        )
+        BrightnessController.shared.set(.init(brightness: brightness, warmth: warmth), for: colorTargetID)
     }
 
     public func resetColorAdjustments() {
         brightness = 100.0
         warmth = 0.0
-        BrightnessController.shared.resetColorTable(displayID: colorTargetID)
+        BrightnessController.shared.reset(colorTargetID)
         showFlashMessage(L10n.tr(zh: "已恢复默认亮度与色彩", en: "Brightness & color reset to default"))
     }
 

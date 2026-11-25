@@ -20,7 +20,7 @@ public enum CLIRunner {
         case "brightness":
             return cmdBrightness(args: Array(args.dropFirst()))
         case "reset":
-            BrightnessController.shared.resetColorTable(displayID: CGMainDisplayID())
+            BrightnessController.shared.reset(colorTarget())
             print(L10n.tr(
                 zh: "已重置屏幕亮度与色彩为 100% 原生状态。",
                 en: "Reset screen brightness and color table to 100% native default."
@@ -51,7 +51,7 @@ public enum CLIRunner {
                 if let c = cur {
                     print("  当前逻辑分辨率: \(c.width) × \(c.height) (等效 \(pct)% 缩放)")
                     print("  高清渲染模式:   \(c.isHiDPI ? "HiDPI 2× (画布 \(c.pixelsWide) × \(c.pixelsHigh))" : "1× 原生点对点")")
-                    print("  刷新率与色深:   \(c.refreshRate)Hz · \(c.bitsPerChannel)-bit (Mode #\(c.modeNumber))")
+                    print("  刷新率与位深:   \(c.refreshRate)Hz · 帧缓冲 \(c.bitsPerChannel)-bit (Mode #\(c.modeNumber))")
                 }
             } else {
                 print("Display: \(d.name) (ID: \(d.id))")
@@ -59,7 +59,7 @@ public enum CLIRunner {
                 if let c = cur {
                     print("  Logical UI Res: \(c.width) × \(c.height) (\(pct)% UI Scale)")
                     print("  Rendering Mode: \(c.isHiDPI ? "HiDPI 2× (Canvas \(c.pixelsWide) × \(c.pixelsHigh))" : "1× Native Pixel-for-Pixel")")
-                    print("  Refresh & BPC:  \(c.refreshRate)Hz · \(c.bitsPerChannel)-bit (Mode #\(c.modeNumber))")
+                    print("  Refresh Rate:   \(c.refreshRate)Hz · \(c.bitsPerChannel)-bit framebuffer (Mode #\(c.modeNumber))")
                 }
             }
             print(hiDPIScalesLine(d))
@@ -112,7 +112,10 @@ public enum CLIRunner {
         if args.contains("--all") {
             return listAllModes(d, onlyHiDPI: onlyHiDPI)
         }
-        print(L10n.tr(zh: "\(d.name) 可用安全显示模式:", en: "Safe display modes for \(d.name):"))
+        print(L10n.tr(
+            zh: "\(d.name) 可用安全显示模式（bit 为帧缓冲位深）:",
+            en: "Safe display modes for \(d.name) (bit = framebuffer depth):"
+        ))
         for m in d.safeModes {
             if onlyHiDPI && !m.isHiDPI { continue }
             let mark = (d.currentMode?.modeNumber == m.modeNumber) ? "*" : " "
@@ -145,8 +148,8 @@ public enum CLIRunner {
             return $0.refreshRate > $1.refreshRate
         }
         print(L10n.tr(
-            zh: "\(d.name) 的全部显示模式（含 macOS 标为不安全的模式，仅供诊断，不能切换）:",
-            en: "All display modes for \(d.name), including the ones macOS marks unsafe (diagnostics only; these can't be applied):"
+            zh: "\(d.name) 的全部显示模式（含 macOS 标为不安全的模式，仅供诊断，不能切换；bit 为帧缓冲位深）:",
+            en: "All display modes for \(d.name), including the ones macOS marks unsafe (diagnostics only; these can't be applied; bit = framebuffer depth):"
         ))
         for m in modes {
             if onlyHiDPI && !m.isHiDPI { continue }
@@ -278,19 +281,27 @@ public enum CLIRunner {
             ), stderr)
             return 1
         }
-        let clamped = min(100.0, max(20.0, val))
-        let warmth = BrightnessController.shared.savedWarmth()
-        BrightnessController.shared.setColorTable(
-            displayID: CGMainDisplayID(),
-            brightnessPercent: clamped,
-            warmthPercent: warmth,
-            persist: true
-        )
+        let target = colorTarget()
+        let controller = BrightnessController.shared
+        controller.adoptLegacySettings(for: target)
+        let settings = BrightnessController.Settings(brightness: val, warmth: controller.settings(for: target).warmth)
+        controller.set(settings, for: target)
         print(L10n.tr(
-            zh: "已将屏幕亮度设为 \(Int(clamped.rounded()))%",
-            en: "Set screen brightness to \(Int(clamped.rounded()))%"
+            zh: "已将屏幕亮度设为 \(Int(settings.brightness.rounded()))%",
+            en: "Set screen brightness to \(Int(settings.brightness.rounded()))%"
         ))
         return 0
+    }
+
+    /// The display `brightness` and `reset` act on: the main display, or the panel mirroring it when it is
+    /// FreeDisplay's virtual HiDPI display.
+    private static func colorTarget() -> CGDirectDisplayID {
+        let main = CGMainDisplayID()
+        guard CGDisplayVendorNumber(main) == VirtualDisplayEngine.vendorID else { return main }
+        var ids = [CGDirectDisplayID](repeating: 0, count: 32)
+        var count: UInt32 = 0
+        guard CGGetOnlineDisplayList(32, &ids, &count) == .success else { return main }
+        return ids.prefix(Int(count)).first { CGDisplayMirrorsDisplay($0) == main } ?? main
     }
 
     private static func printHelp() {

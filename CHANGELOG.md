@@ -6,6 +6,17 @@ its section here.
 
 ## [Unreleased]
 
+- **Brightness stays on the display you set it for** — with more than one
+  external display, DDC brightness went to one default display rather than
+  the one selected in the panel, all displays shared one brightness and
+  warmth, and resetting one display cleared the others' dimming. Each display
+  now has its own DDC connection, found in the I/O Registry, and its own
+  saved values; a display FreeDisplay can't match is dimmed through gamma
+  instead (#2).
+- **The bit depth is labelled as the framebuffer's** — the "10-bit" in the
+  panel, `status` and `list` is the depth macOS uses for the mode's
+  framebuffer, not the bit depth on the cable or the panel's own (#2).
+
 ## [1.3.1] - 2026-11-26
 
 - **In-app updates are ready for newer macOS** — macOS 27 deprecates

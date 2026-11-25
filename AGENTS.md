@@ -37,7 +37,13 @@ Rules for changing this repository. `CLAUDE.md` is a symlink to this file.
   screen. To reposition it, set `positioningRect`; never close and reopen it,
   which re-runs that first layout.
 - `BrightnessController` owns DDC/CI (`IOAVService`, VCP 0x10, loaded with
-  `dlsym`) and the gamma table.
+  `dlsym`) and the gamma table, per display. It sends DDC only through the
+  display's own `DCPAVServiceProxy`: the registry lists each framebuffer just
+  before its AV service, and the framebuffer must be at the display's
+  `IODisplayLocation` (from `CoreDisplay_DisplayCreateInfoDictionary`, also
+  loaded with `dlsym`), or, without one, be the only match for the display's
+  vendor, product and serial number. A display it can't match gets gamma
+  dimming, never another display's DDC.
 - `Updater.swift` is the only code that uses the network. It reads the latest
   release from the GitHub API, downloads `FreeDisplay-X.Y.Z.dmg` with progress
   and speed, checks it against `FreeDisplay-X.Y.Z.dmg.sha256`, mounts it with
@@ -73,13 +79,18 @@ Rules for changing this repository. `CLAUDE.md` is a symlink to this file.
   default, at most once a day) or the user asks. A build without a team ID
   (a local ad hoc build) or in a location it can't write never replaces
   itself; it opens the release page instead.
-- Brightness stays within 20–100 and warmth within 0–50. DDC/CI is used only
-  while warmth is off, the gamma table otherwise, and `reset` restores the
-  ColorSync settings.
+- Brightness stays within 20–100 and warmth within 0–50, and each display
+  keeps its own (`FreeDisplay.displayColor`, keyed like the virtual-display
+  fallback). DDC/CI is used only while that display's warmth is off, the gamma
+  table otherwise, and `reset` restores its ColorSync settings.
+  `CGDisplayRestoreColorSyncSettings` resets every display, so the others this
+  process adjusted get their values back right after.
 - The bundle identifier `local.opensource.FreeDisplay`, the distributed
   notification `local.opensource.FreeDisplay.showPopover`, the UserDefaults
-  keys `FreeDisplay.softwareBrightness`, `FreeDisplay.softwareWarmth`,
-  `FreeDisplay.virtualHiDPIDisplays`, `FreeDisplay.autoCheckUpdates`,
+  keys `FreeDisplay.displayColor`, `FreeDisplay.softwareBrightness` and
+  `FreeDisplay.softwareWarmth` (1.3.1's values, adopted once by the display
+  the panel starts on), `FreeDisplay.virtualHiDPIDisplays`,
+  `FreeDisplay.autoCheckUpdates`,
   `FreeDisplay.lastUpdateCheck` and `FreeDisplay.updatedFrom`, and the virtual
   display's vendor ID `0xF0D1` are installed state: renaming one breaks
   existing installs (the second-launch handoff, saved values, the login item,
