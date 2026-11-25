@@ -6,6 +6,8 @@ its section here.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-26
+
 - **In-app updates** — FreeDisplay checks GitHub Releases once a day (or when
   you ask, from the bottom of the panel, where the check can also be turned
   off) and installs a new version with one click: it downloads the DMG with a
