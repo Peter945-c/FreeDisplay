@@ -6,6 +6,8 @@ its section here.
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-11-26
+
 - **Brightness stays on the display you set it for** — with more than one
   external display, DDC brightness went to one default display rather than
   the one selected in the panel, all displays shared one brightness and
