@@ -338,13 +338,12 @@ public final class Updater: ObservableObject {
         let mount = work.appendingPathComponent("mount")
         let staged = work.appendingPathComponent("FreeDisplay.app")
         try? FileManager.default.createDirectory(at: mount, withIntermediateDirectories: true)
-        guard run("/usr/bin/hdiutil", ["attach", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint", mount.path, dmg.path]) == 0 else {
+        guard let tool = attach(dmg, at: mount) else {
             return .failure(.mountFailed)
         }
         let source = mount.appendingPathComponent("FreeDisplay.app")
-        let copied = FileManager.default.fileExists(atPath: source.path)
-            && run("/usr/bin/ditto", [source.path, staged.path]) == 0
-        _ = run("/usr/bin/hdiutil", ["detach", mount.path, "-force"])
+        let copied = run("/usr/bin/ditto", [source.path, staged.path]) == 0
+        detach(mount, attachedWith: tool)
         guard copied else { return .failure(.copyFailed) }
 
         // 3. signed by the same Developer ID team, and the version the release says
@@ -355,6 +354,40 @@ public final class Updater: ObservableObject {
             return .failure(.versionMismatch)
         }
         return .success(staged)
+    }
+
+    enum MountTool: CaseIterable {
+        case hdiutil, diskutil
+    }
+
+    /// Mounts `dmg` read-only and hidden at `mount` and returns the tool that did it, once FreeDisplay.app is there.
+    /// hdiutil works on every macOS FreeDisplay supports, but macOS 27 deprecates `hdiutil attach` in favour of
+    /// `diskutil image attach`, which older systems lack; so try hdiutil first and fall back to diskutil.
+    nonisolated static func attach(_ dmg: URL, at mount: URL, tools: [MountTool] = MountTool.allCases) -> MountTool? {
+        let app = mount.appendingPathComponent("FreeDisplay.app")
+        for tool in tools {
+            let status: Int32
+            switch tool {
+            case .hdiutil:
+                status = run("/usr/bin/hdiutil", ["attach", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint", mount.path, dmg.path])
+            case .diskutil:
+                status = run("/usr/sbin/diskutil", ["image", "attach", "--readOnly", "--nobrowse", "--mountPoint", mount.path, dmg.path])
+            }
+            if status == 0, FileManager.default.fileExists(atPath: app.path) {
+                return tool
+            }
+            if status == 0 {
+                detach(mount, attachedWith: tool) // attached, but not where expected
+            }
+        }
+        return nil
+    }
+
+    nonisolated static func detach(_ mount: URL, attachedWith tool: MountTool) {
+        if tool == .hdiutil, run("/usr/bin/hdiutil", ["detach", mount.path, "-force"]) == 0 {
+            return
+        }
+        _ = run("/usr/sbin/diskutil", ["eject", mount.path])
     }
 
     /// The designated requirement of a Developer ID app from `teamID`, checked over every architecture and nested code.

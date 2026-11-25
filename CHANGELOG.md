@@ -6,6 +6,10 @@ its section here.
 
 ## [Unreleased]
 
+- **In-app updates are ready for newer macOS** — macOS 27 deprecates
+  `hdiutil attach`, which the updater mounts the downloaded DMG with; when
+  it fails, the updater now mounts it with `diskutil image attach` instead.
+
 ## [1.3.0] - 2026-11-26
 
 - **In-app updates** — FreeDisplay checks GitHub Releases once a day (or when

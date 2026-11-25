@@ -40,11 +40,13 @@ Rules for changing this repository. `CLAUDE.md` is a symlink to this file.
   `dlsym`) and the gamma table.
 - `Updater.swift` is the only code that uses the network. It reads the latest
   release from the GitHub API, downloads `FreeDisplay-X.Y.Z.dmg` with progress
-  and speed, checks it against `FreeDisplay-X.Y.Z.dmg.sha256`, copies the app
-  out with `hdiutil`/`ditto`, and accepts it only if it meets the Developer ID
-  requirement for the running app's team ID with the release's identifier and
-  version. A detached shell script swaps the bundle after the app quits
-  (restoring the old one if the copy fails) and reopens it.
+  and speed, checks it against `FreeDisplay-X.Y.Z.dmg.sha256`, mounts it with
+  `hdiutil attach` (falling back to `diskutil image attach`, which macOS 27
+  prefers and older systems lack), copies the app out with `ditto`, and
+  accepts it only if it meets the Developer ID requirement for the running
+  app's team ID with the release's identifier and version. A detached shell
+  script swaps the bundle after the app quits (restoring the old one if the
+  copy fails) and reopens it.
 
 ## Behavior invariants
 - Offer only modes macOS reports and marks safe (`DisplayModeItem.isSafe`).
