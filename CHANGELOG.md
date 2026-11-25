@@ -6,6 +6,8 @@ its section here.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-26
+
 - **The menu bar panel opens in full again** — it no longer opens with its
   top cut off above the screen, and it stays under the menu bar icon when
   its height changes or the display it is on switches mode. 1.2.0 made this
