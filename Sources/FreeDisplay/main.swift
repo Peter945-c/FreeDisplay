@@ -110,6 +110,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        // Unmirror before the process (and with it the virtual HiDPI display) goes away. The teardown commits the
+        // configuration permanently, so an unconfirmed refresh-rate change is undone first.
+        if viewModel.pendingRevertSeconds > 0 {
+            viewModel.revertRefreshRateChange()
+        }
+        VirtualDisplayEngine.shared.stop()
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         showMainWindow()
         return true

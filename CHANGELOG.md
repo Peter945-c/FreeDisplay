@@ -6,6 +6,12 @@ its section here.
 
 ## [Unreleased]
 
+- **Virtual-display HiDPI fallback (experimental)** — for a monitor macOS
+  gives no HiDPI mode between 2× and native, the panel can create a virtual
+  display with HiDPI modes and have the monitor mirror it, so 2048 × 1152 and
+  the other presets work. It costs HDR and a little GPU time, lasts only
+  while FreeDisplay runs, switches back after 15 seconds unless kept, and
+  comes back on the next launch for a monitor it was kept on.
 - **The panel stays on screen after a mode switch** — switching the
   resolution of the display the menu bar panel is on no longer leaves the
   panel partly off-screen; it re-anchors under the menu bar icon (#1).

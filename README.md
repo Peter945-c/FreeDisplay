@@ -66,6 +66,12 @@ whole app is about 1.5 MB.
   monitor answers, through the display's gamma table otherwise, and a warm
   tint from 0 to 50% for the evening. Both are remembered and applied again
   after a display change.
+- **A virtual-display fallback (experimental)** — when macOS gives a monitor
+  no HiDPI mode between 2× and native (only 1280 × 720 HiDPI on a
+  2560 × 1440 panel, for example), the popover offers to create a virtual
+  display with HiDPI modes and have the monitor mirror it, so the presets
+  work again. It costs HDR and a little GPU time, lasts only while
+  FreeDisplay runs, and switches back after 15 seconds unless you keep it.
 - **A command line** — `freedisplay status | list | preset | set | brightness |
   reset`, for scripts and shortcuts.
 - **Chinese and English** — the app and the CLI follow the macOS language;
@@ -89,15 +95,16 @@ time: no kernel extension, no driver, no SIP change.
 
 Worth knowing:
 
-- **FreeDisplay chooses among modes macOS already has.** It does not add
-  resolutions: no EDID override, no virtual display. If
-  `freedisplay list --hidpi` prints nothing for a monitor, macOS offers it no
-  HiDPI mode and FreeDisplay cannot create one. Some Mac and display pairs get
-  integer scaling only: a 2560 × 1440 monitor with just 1280 × 720 HiDPI
-  (largest canvas 2560 × 1440) and nothing in between such as 2048 × 1152.
-  The panel and `freedisplay status` say so; when reporting one, include the
-  output of `freedisplay list --all`, which adds the modes macOS marks unsafe
-  and their flags.
+- **FreeDisplay chooses among modes macOS already has.** It never writes EDID
+  or display override files. If `freedisplay list --hidpi` prints nothing for
+  a monitor, or only the integer 2× mode (a 2560 × 1440 monitor with just
+  1280 × 720 HiDPI, largest canvas 2560 × 1440), the panel and
+  `freedisplay status` say so. The one exception is the opt-in
+  virtual-display fallback above: a virtual display (CoreGraphics' private
+  `CGVirtualDisplay` classes, looked up at run time) that the monitor mirrors
+  and that exists only while FreeDisplay runs. When reporting a monitor like
+  this, include the output of `freedisplay list --all`, which adds the modes
+  macOS marks unsafe and their flags.
 - **SkyLight is private API.** A macOS update can change it; if those calls go
   away, mode switching stops working until FreeDisplay is updated.
 - **The CLI changes the main display.** `status` lists every display, and the

@@ -63,6 +63,16 @@ public enum CLIRunner {
                 }
             }
             print(hiDPIScalesLine(d))
+            let primary = CGDisplayMirrorsDisplay(d.id)
+            if primary != kCGNullDirectDisplay {
+                let virtualNote = CGDisplayVendorNumber(primary) == VirtualDisplayEngine.vendorID
+                    ? L10n.tr(zh: "（FreeDisplay 虚拟屏 HiDPI）", en: " (FreeDisplay virtual HiDPI)")
+                    : ""
+                print(L10n.tr(
+                    zh: "  镜像:           显示器 \(primary)\(virtualNote)",
+                    en: "  Mirroring:      display \(primary)\(virtualNote)"
+                ))
+            }
         }
         return 0
     }

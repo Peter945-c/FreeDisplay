@@ -43,6 +43,8 @@ public struct DisplayDevice: Identifiable, Equatable {
     public let nativePPI: Int
     public let currentMode: DisplayModeItem?
     public let safeModes: [DisplayModeItem]
+    /// The virtual HiDPI display a real panel mirrors (VirtualDisplayEngine), listed under the panel's name and size.
+    public var virtualHiDPI: Bool = false
 
     public var nativeAspectRatio: Double {
         nativeHeight > 0 ? Double(nativeWidth) / Double(nativeHeight) : (16.0 / 9.0)

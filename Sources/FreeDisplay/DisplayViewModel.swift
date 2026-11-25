@@ -19,6 +19,13 @@ public final class DisplayViewModel: ObservableObject {
     private var revertTimer: Timer?
     private var previousModeForRevert: (displayID: CGDirectDisplayID, modeNumber: Int32, targetModeNumber: Int32)?
 
+    // Virtual-display HiDPI fallback (VirtualDisplayEngine): seconds left before an unconfirmed start is undone
+    @Published public var virtualConfirmSeconds: Int = 0
+    @Published public var virtualBusy: Bool = false
+    private var virtualTimer: Timer?
+    private var virtualRestoreTried: Set<String> = []
+    private let virtualDisplaysKey = "FreeDisplay.virtualHiDPIDisplays"
+
     private var screenObserver: NSObjectProtocol?
     private var localeObserver: NSObjectProtocol?
 
@@ -31,7 +38,7 @@ public final class DisplayViewModel: ObservableObject {
 
         if brightness < 99.5 || warmth > 0.5 {
             BrightnessController.shared.setColorTable(
-                displayID: selectedDisplayID,
+                displayID: colorTargetID,
                 brightnessPercent: brightness,
                 warmthPercent: warmth,
                 persist: false
@@ -46,9 +53,10 @@ public final class DisplayViewModel: ObservableObject {
             Task { @MainActor in
                 guard let self = self else { return }
                 self.refreshDisplays()
+                self.syncVirtualHiDPI()
                 if self.brightness < 99.5 || self.warmth > 0.5 {
                     BrightnessController.shared.setColorTable(
-                        displayID: self.selectedDisplayID,
+                        displayID: self.colorTargetID,
                         brightnessPercent: self.brightness,
                         warmthPercent: self.warmth,
                         persist: false
@@ -68,6 +76,8 @@ public final class DisplayViewModel: ObservableObject {
                 self.refreshDisplays()
             }
         }
+
+        syncVirtualHiDPI()
     }
 
     deinit {
@@ -85,10 +95,163 @@ public final class DisplayViewModel: ObservableObject {
 
     public func refreshDisplays() {
         language = L10n.current
-        let list = SkyLightEngine.shared.queryDisplays()
+        var list = SkyLightEngine.shared.queryDisplays()
+        if let s = VirtualDisplayEngine.shared.session {
+            // While a panel mirrors the virtual HiDPI display, list the two as one: the virtual display, whose modes
+            // the controls switch, under the panel's name and size. The mirroring panel itself is hidden.
+            list.removeAll { $0.id == s.physicalID }
+            list = list.map { d in
+                guard d.id == s.virtualID else { return d }
+                return DisplayDevice(
+                    id: d.id,
+                    name: s.physicalName,
+                    isBuiltIn: false,
+                    diagonalInches: s.diagonalInches,
+                    nativeWidth: s.nativeWidth,
+                    nativeHeight: s.nativeHeight,
+                    nativePPI: s.nativePPI,
+                    currentMode: d.currentMode,
+                    safeModes: d.safeModes.filter { $0.width <= s.nativeWidth },
+                    virtualHiDPI: true
+                )
+            }
+        } else {
+            // a virtual display that is going away after a stop
+            list.removeAll { CGDisplayVendorNumber($0.id) == VirtualDisplayEngine.vendorID }
+        }
         displays = list
         if !list.contains(where: { $0.id == selectedDisplayID }), let first = list.first {
             selectedDisplayID = first.id
+        }
+    }
+
+    // MARK: - Virtual-display HiDPI fallback
+
+    public var virtualHiDPIAvailable: Bool { VirtualDisplayEngine.shared.isAvailable }
+
+    /// The display brightness and warmth act on: the real panel, also while it mirrors the virtual HiDPI display.
+    private var colorTargetID: CGDirectDisplayID {
+        if let s = VirtualDisplayEngine.shared.session, selectedDisplayID == s.virtualID {
+            return s.physicalID
+        }
+        return selectedDisplayID
+    }
+
+    /// Turns the virtual-display fallback on for the selected display. It is undone after 15 seconds unless the user
+    /// keeps it, the same safety net as a refresh-rate change.
+    public func enableVirtualHiDPI() {
+        guard let disp = selectedDisplay, !disp.isBuiltIn, !disp.virtualHiDPI, !virtualBusy else { return }
+        virtualBusy = true
+        Task { @MainActor in
+            let result = await VirtualDisplayEngine.shared.start(for: disp)
+            self.virtualBusy = false
+            switch result {
+            case .success(let virtualID):
+                self.selectedDisplayID = virtualID
+                self.refreshDisplays()
+                self.startVirtualCountdown()
+            case .failure(let error):
+                self.refreshDisplays()
+                self.showFlashMessage(L10n.tr(
+                    zh: "虚拟屏开启失败：\(error.message)",
+                    en: "Virtual display failed: \(error.message)"
+                ))
+            }
+        }
+    }
+
+    /// Keeps the fallback and remembers the panel, so it comes back on the next launch or reconnect.
+    public func confirmVirtualHiDPI() {
+        guard let s = VirtualDisplayEngine.shared.session else { return }
+        cancelVirtualTimer()
+        var kept = UserDefaults.standard.stringArray(forKey: virtualDisplaysKey) ?? []
+        if !kept.contains(s.physicalKey) {
+            kept.append(s.physicalKey)
+        }
+        UserDefaults.standard.set(kept, forKey: virtualDisplaysKey)
+        showFlashMessage(L10n.tr(zh: "已保留虚拟屏 HiDPI，下次启动自动开启", en: "Virtual HiDPI kept; it comes back on next launch"))
+    }
+
+    public func disableVirtualHiDPI() {
+        stopVirtualHiDPI(message: L10n.tr(zh: "已关闭虚拟屏，回到原生模式", en: "Virtual display off, back to native modes"))
+    }
+
+    private func stopVirtualHiDPI(message: String) {
+        guard let s = VirtualDisplayEngine.shared.session else { return }
+        cancelVirtualTimer()
+        // Tearing the virtual display down ends with a permanent configuration commit, which would also keep an
+        // unconfirmed refresh-rate change; undo that first.
+        if pendingRevertSeconds > 0 {
+            revertRefreshRateChange()
+        }
+        let kept = (UserDefaults.standard.stringArray(forKey: virtualDisplaysKey) ?? []).filter { $0 != s.physicalKey }
+        UserDefaults.standard.set(kept, forKey: virtualDisplaysKey)
+        VirtualDisplayEngine.shared.stop()
+        selectedDisplayID = s.physicalID
+        refreshDisplays()
+        showFlashMessage(message)
+    }
+
+    private func startVirtualCountdown() {
+        cancelVirtualTimer()
+        virtualConfirmSeconds = 15
+        virtualTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self else { return }
+                if self.virtualConfirmSeconds > 1 {
+                    self.virtualConfirmSeconds -= 1
+                } else {
+                    self.stopVirtualHiDPI(message: L10n.tr(
+                        zh: "未确认，已自动关闭虚拟屏",
+                        en: "Not confirmed; virtual display turned off"
+                    ))
+                }
+            }
+        }
+    }
+
+    private func cancelVirtualTimer() {
+        virtualTimer?.invalidate()
+        virtualTimer = nil
+        virtualConfirmSeconds = 0
+    }
+
+    /// Keeps the fallback in step with the hardware. It is torn down when its panel goes away or stops mirroring
+    /// (the virtual display would otherwise be an invisible extended desktop), and it comes back, once per
+    /// connection, for a panel the user kept it on that is connected and still has no native fractional HiDPI mode.
+    private func syncVirtualHiDPI() {
+        if let s = VirtualDisplayEngine.shared.session {
+            if CGDisplayIsOnline(s.physicalID) == 0 || CGDisplayMirrorsDisplay(s.physicalID) != s.virtualID {
+                cancelVirtualTimer()
+                if pendingRevertSeconds > 0 {
+                    revertRefreshRateChange()
+                }
+                VirtualDisplayEngine.shared.stop()
+                if selectedDisplayID == s.virtualID {
+                    selectedDisplayID = s.physicalID
+                }
+                refreshDisplays()
+            }
+            return
+        }
+        guard VirtualDisplayEngine.shared.isAvailable, !virtualBusy else { return }
+        VirtualDisplayEngine.shared.sweepLeftovers()
+        let kept = UserDefaults.standard.stringArray(forKey: virtualDisplaysKey) ?? []
+        let panels = displays.filter { !$0.isBuiltIn && !$0.virtualHiDPI }
+        virtualRestoreTried.formIntersection(panels.map { VirtualDisplayEngine.key(for: $0.id) })
+        guard let disp = panels.first(where: {
+            let key = VirtualDisplayEngine.key(for: $0.id)
+            return kept.contains(key) && !virtualRestoreTried.contains(key) && $0.fractionalHiDPIModes.isEmpty
+        }) else { return }
+        virtualRestoreTried.insert(VirtualDisplayEngine.key(for: disp.id))
+        virtualBusy = true
+        Task { @MainActor in
+            let result = await VirtualDisplayEngine.shared.start(for: disp)
+            self.virtualBusy = false
+            if case .success(let virtualID) = result, self.selectedDisplayID == disp.id {
+                self.selectedDisplayID = virtualID
+            }
+            self.refreshDisplays()
         }
     }
 
@@ -184,7 +347,7 @@ public final class DisplayViewModel: ObservableObject {
     public func updateBrightness(_ newVal: Double) {
         brightness = newVal
         BrightnessController.shared.setColorTable(
-            displayID: selectedDisplayID,
+            displayID: colorTargetID,
             brightnessPercent: brightness,
             warmthPercent: warmth
         )
@@ -193,7 +356,7 @@ public final class DisplayViewModel: ObservableObject {
     public func updateWarmth(_ newVal: Double) {
         warmth = newVal
         BrightnessController.shared.setColorTable(
-            displayID: selectedDisplayID,
+            displayID: colorTargetID,
             brightnessPercent: brightness,
             warmthPercent: warmth
         )
@@ -202,7 +365,7 @@ public final class DisplayViewModel: ObservableObject {
     public func resetColorAdjustments() {
         brightness = 100.0
         warmth = 0.0
-        BrightnessController.shared.resetColorTable(displayID: selectedDisplayID)
+        BrightnessController.shared.resetColorTable(displayID: colorTargetID)
         showFlashMessage(L10n.tr(zh: "已恢复默认亮度与色彩", en: "Brightness & color reset to default"))
     }
 
