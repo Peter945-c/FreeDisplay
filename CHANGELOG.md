@@ -6,6 +6,10 @@ its section here.
 
 ## [Unreleased]
 
+- **The panel stays on screen after a mode switch** — switching the
+  resolution of the display the menu bar panel is on no longer leaves the
+  panel partly off-screen; it re-anchors under the menu bar icon (#1).
+
 ## [1.1.0] - 2026-11-23
 
 The first public release.

@@ -94,6 +94,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
 
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenParametersChanged(_:)),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
+
         if !startSilently {
             showMainWindow()
         }
@@ -110,6 +117,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func handleShowWindowNotification(_ note: Notification) {
         showMainWindow()
+    }
+
+    /// Switching the mode of the screen the panel is on changes that screen's size and position, but AppKit keeps
+    /// the popover and the window where they were, so part of them can end up off-screen (issue #1). Once the menu
+    /// bar has settled, re-anchor the popover under the status item and pull the window back onto its screen.
+    @objc private func screenParametersChanged(_ note: Notification) {
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            if self.popover.isShown, let button = self.statusItem.button {
+                let animates = self.popover.animates
+                self.popover.animates = false
+                self.popover.close()
+                self.popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+                self.popover.contentViewController?.view.window?.makeKey()
+                self.popover.animates = animates
+            }
+            if self.mainWindow.isVisible, let screen = self.mainWindow.screen ?? NSScreen.main {
+                let frame = self.mainWindow.constrainFrameRect(self.mainWindow.frame, to: screen)
+                if frame != self.mainWindow.frame {
+                    self.mainWindow.setFrame(frame, display: true)
+                }
+            }
+        }
     }
 
     @objc private func togglePopover(_ sender: AnyObject?) {
