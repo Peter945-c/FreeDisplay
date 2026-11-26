@@ -1,0 +1,56 @@
+name: Fork build (unsigned)
+
+# 只为自己出包：不需要 Apple 签名证书，产物是 ad-hoc 签名的通用二进制。
+# 上游的 release.yml 需要 Developer ID 证书，在 fork 里跑会直接失败，所以单独走这一个。
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build universal app
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Build the universal app (ad-hoc signed)
+        run: ./build.sh --universal --no-install
+
+      - name: Verify the bundle
+        run: |
+          set -euo pipefail
+          app=dist/FreeDisplay.app
+          exe="$app/Contents/MacOS/FreeDisplay"
+          test "$(lipo -archs "$exe" | tr ' ' '\n' | sort | xargs)" = "arm64 x86_64"
+          plutil -lint "$app/Contents/Info.plist"
+          codesign --verify --strict "$app" || true
+          du -sh "$app"
+
+      - name: Zip for download
+        run: |
+          set -euo pipefail
+          cd dist
+          ditto -c -k --sequesterRsrc --keepParent FreeDisplay.app FreeDisplay-unsigned.zip
+          ls -lh FreeDisplay-unsigned.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FreeDisplay-unsigned
+          path: dist/FreeDisplay-unsigned.zip
+          retention-days: 14
