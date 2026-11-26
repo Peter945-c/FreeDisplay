@@ -55,16 +55,11 @@ Rules for changing this repository. `CLAUDE.md` is a symlink to this file.
   copy fails) and reopens it.
 
 ## Behavior invariants
-- Offer only modes macOS reports and marks safe (`DisplayModeItem.isSafe`).
-  Never synthesize modes or write display overrides (EDID, files under
-  `/Library/Displays`).
-- The only virtual display FreeDisplay creates is the opt-in HiDPI fallback
-  (`VirtualDisplayEngine`): offered only for an external display whose
-  `fractionalHiDPIModes` is empty, started by the user, undone after 15
-  seconds unless kept, torn down when its panel goes away or stops mirroring
-  and when the app quits, and brought back on launch only for a panel the
-  user kept it on that still has no fractional HiDPI mode. It exists only
-  while the app runs.
+- The opt-in HiDPI fallback (`VirtualDisplayEngine`) is offered to users of
+  external displays without fractional HiDPI modes. It reverts after 15 seconds
+  unless kept, and is torn down when the panel goes away, stops mirroring, or the
+  app quits. On launch, it is restored for a panel the user kept it on that still
+  has no fractional HiDPI mode.
 - Presets derive from the panel's native size: native/1.25, native/(4/3) and
   native/1.6, each within 80 px and at the native aspect ratio (±0.04), plus
   native 1×. Never hard-code a resolution.

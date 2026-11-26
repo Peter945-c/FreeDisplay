@@ -58,7 +58,7 @@ macOS 为每台显示器维护一份显示模式列表。每一项包含逻辑�
 
 需要了解的边界：
 
-- **FreeDisplay 只在 macOS 已有的模式之间切换。** 它不改 EDID，也不写显示器覆盖文件。如果 `freedisplay list --hidpi` 对某台显示器什么都没列出，或者只有整数倍的 2× 模式（例如 2560 × 1440 显示器只有 1280 × 720 HiDPI，最大画布 2560 × 1440），面板和 `freedisplay status` 会直接说明。唯一的例外是上面的虚拟屏兜底：让显示器镜像一块虚拟屏（CoreGraphics 的私有 `CGVirtualDisplay` 类，运行时查找），这块虚拟屏只在 FreeDisplay 运行时存在。反馈这类显示器的问题时，请附上 `freedisplay list --all` 的输出（包括 macOS 标为不安全的模式和标志位）。
+- **反馈 HiDPI 档位缺失？** 请附上 `freedisplay list --all` 的输出，里面包含 macOS 标为不安全的模式及其标志位。
 - **SkyLight 是私有 API。** macOS 更新可能改动它；一旦这些调用不可用，模式切换就会失效，直到 FreeDisplay 跟进更新。
 - **命令行修改的是主显示器。** `status` 会列出所有显示器；连接多台显示器时，面板里有显示器选择器。
 - **硬件亮度需要通过 `IOAVService` 走 DDC/CI**，这是 Apple 芯片 Mac 与显示器通信的途径。FreeDisplay 只把 DDC 命令发给在 I/O Registry 里能对应上自己那路服务的显示器；对应不上的显示器改用 gamma 调光。其他情况下（以及开启暖色时），亮度通过 gamma 表实现：调暗的是画面而不是背光，其他写 gamma 表的应用（f.lux、校色工具）可能覆盖它。

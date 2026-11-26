@@ -100,16 +100,9 @@ time: no kernel extension, no driver, no SIP change.
 
 Worth knowing:
 
-- **FreeDisplay chooses among modes macOS already has.** It never writes EDID
-  or display override files. If `freedisplay list --hidpi` prints nothing for
-  a monitor, or only the integer 2× mode (a 2560 × 1440 monitor with just
-  1280 × 720 HiDPI, largest canvas 2560 × 1440), the panel and
-  `freedisplay status` say so. The one exception is the opt-in
-  virtual-display fallback above: a virtual display (CoreGraphics' private
-  `CGVirtualDisplay` classes, looked up at run time) that the monitor mirrors
-  and that exists only while FreeDisplay runs. When reporting a monitor like
-  this, include the output of `freedisplay list --all`, which adds the modes
-  macOS marks unsafe and their flags.
+- **Reporting a missing HiDPI mode?** Include the output of
+  `freedisplay list --all`, which includes the modes macOS marks unsafe and
+  their flags.
 - **SkyLight is private API.** A macOS update can change it; if those calls go
   away, mode switching stops working until FreeDisplay is updated.
 - **The CLI changes the main display.** `status` lists every display, and the
